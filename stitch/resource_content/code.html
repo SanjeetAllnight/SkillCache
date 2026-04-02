@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillCache - Resource Detail</title>
+<!-- Google Fonts -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Manrope:wght@700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#326943",
+                        "on-primary": "#ffffff",
+                        "surface-container-highest": "#e6e3d0",
+                        "surface": "#fdfae6",
+                        "on-background": "#1c1c11",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#02210f",
+                        "secondary-container": "#c5e9cb",
+                        "surface-bright": "#fdfae6",
+                        "inverse-surface": "#313124",
+                        "primary-fixed": "#b4f1c0",
+                        "on-secondary-fixed-variant": "#2f4d37",
+                        "surface-container-low": "#f7f4e1",
+                        "on-surface-variant": "#414941",
+                        "surface-dim": "#dddbc8",
+                        "outline-variant": "#c0c9be",
+                        "tertiary": "#8d4a58",
+                        "secondary-fixed": "#c8ebcd",
+                        "primary-fixed-dim": "#99d4a5",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#ffaaba",
+                        "on-secondary-container": "#4a6a52",
+                        "on-primary-fixed": "#00210c",
+                        "background": "#fdfae6",
+                        "outline": "#717970",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#accfb2",
+                        "on-tertiary-fixed-variant": "#713341",
+                        "inverse-on-surface": "#f4f1de",
+                        "on-error-container": "#93000a",
+                        "secondary": "#46654e",
+                        "surface-container": "#f1eedb",
+                        "tertiary-fixed-dim": "#ffb1c0",
+                        "surface-variant": "#e6e3d0",
+                        "primary": "#326943",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#94cfa0",
+                        "on-primary-fixed-variant": "#18512d",
+                        "inverse-primary": "#99d4a5",
+                        "on-surface": "#1c1c11",
+                        "tertiary-fixed": "#ffd9de",
+                        "on-tertiary-fixed": "#3a0717",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#215934",
+                        "surface-container-high": "#ebe9d6",
+                        "on-tertiary-container": "#7b3b4a"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- SideNavBar (Authority: Shared Components JSON) -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#fdfae6] dark:bg-stone-950 flex flex-col py-8 px-6 z-50">
+<div class="mb-10 px-4">
+<span class="text-2xl font-black text-[#326943] dark:text-[#94CFA0] tracking-tighter">SkillCache</span>
+<p class="text-xs text-stone-500 font-medium mt-1">Digital Atelier</p>
+</div>
+<nav class="flex-1 space-y-2">
+<!-- Active Navigation Mapping: "Repository" is active for this Detail page -->
+<a class="flex items-center gap-3 px-4 py-3 text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-manrope font-bold text-lg">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">diversity_3</span>
+<span class="font-manrope font-bold text-lg">Find Mentors</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-manrope font-bold text-lg">Sessions</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-[#326943] dark:text-[#94CFA0] font-bold border-r-4 border-[#326943] translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">folder_open</span>
+<span class="font-manrope font-bold text-lg">Repository</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors rounded-lg group" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-manrope font-bold text-lg">Profile</span>
+</a>
+</nav>
+<button class="mt-auto bg-[#326943] text-white py-4 px-6 rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity">
+<span class="material-symbols-outlined">add</span>
+            Share a Skill
+        </button>
+</aside>
+<!-- TopNavBar (Authority: Shared Components JSON) -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 z-40 bg-[#fdfae6]/80 dark:bg-stone-950/80 backdrop-blur-xl flex justify-between items-center px-12 shadow-sm dark:shadow-none">
+<div class="flex items-center gap-4 bg-surface-container rounded-full px-4 py-2 w-96">
+<span class="material-symbols-outlined text-stone-500">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-inter w-full" placeholder="Search the atelier..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4 text-stone-500">
+<button class="material-symbols-outlined hover:opacity-80 transition-opacity">notifications</button>
+<button class="material-symbols-outlined hover:opacity-80 transition-opacity">settings</button>
+</div>
+<button class="bg-[#326943] text-white px-5 py-2 rounded-full font-inter text-sm font-semibold hover:opacity-80 transition-opacity">
+                New Session
+            </button>
+<div class="w-8 h-8 rounded-full bg-secondary-container overflow-hidden">
+<img alt="User Avatar" data-alt="Close-up portrait of a young professional woman with a warm smile in a brightly lit studio environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuASS40IVTW1pJJYaHRMmy1Faq24WgZnwMEdQ392nf1dAj20lAR54IqXTooxgDhlkDd2pGNt3NppVX5kMddCdIgzCDtHwJXg5M1JtVaHUixoRQy52wSGknUyAu09Z47SUi5JesXswjrK0QlSBZzADKsKw2SClzanwlSUL9AvKS2REPCPldglKgNFIvM_PNrYSgDlKcXDwIJoSUnkmrpKtJbNuxMQNCP_HzjiJydQlPg96d09WxCFXtfDy-q8ij-3fVKOAkkF6uurSbc"/>
+</div>
+</div>
+</header>
+<!-- Main Content Canvas -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="max-w-5xl mx-auto py-20 px-12">
+<!-- Breadcrumbs / Back navigation -->
+<nav class="flex items-center gap-2 mb-10 text-on-surface-variant font-label text-sm">
+<a class="hover:text-primary transition-colors" href="#">Repository</a>
+<span class="material-symbols-outlined text-xs">chevron_right</span>
+<span class="font-medium text-on-surface">Typography in Brand Systems</span>
+</nav>
+<!-- Hero Section / Editorial Header -->
+<header class="mb-16">
+<div class="flex flex-wrap gap-3 mb-6">
+<span class="bg-secondary-container text-on-secondary-container px-4 py-1 rounded-full text-xs font-semibold tracking-wide">DESIGN THEORY</span>
+<span class="bg-tertiary-fixed text-on-tertiary-fixed px-4 py-1 rounded-full text-xs font-semibold tracking-wide">RESOURCES</span>
+</div>
+<h1 class="text-6xl font-black tracking-tighter text-on-background leading-[1.1] mb-8 max-w-3xl">
+                    Typography as an Architectural Foundation.
+                </h1>
+<div class="flex items-center justify-between py-8 border-y border-outline-variant/15">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full overflow-hidden bg-surface-container-high">
+<img alt="Author profile" data-alt="Professional headshot of a mature male designer with creative glasses in a minimal office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBagJl_Z4DzCceSvizv39-YdeD1-YsPnXOfUB6XtOhNLvg3KNF3FgPpNdJlskUinLSrMjPH8fk55zrwTf9rIkE-kBV3UUFY5Jmhj09ghWE-moNac7dDkaQpOCyvVdT5o5fW0yRkZ4bWGdypoNAIiXRdDkjGxRp-pZ1sBF5tcIkkxiBmpWk4UsSuY1j3AlMemSbljH4BepqTVZ9rsXR5Y1cPrGL4wny4CNHd64t5FRKrKf2dSt5Scqh3SDhY2zG0-d3l4BRNuWEr26A"/>
+</div>
+<div>
+<p class="font-bold text-on-surface">Julian Aris</p>
+<p class="text-xs text-on-surface-variant">Design Lead at Atelier Collective</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container-lowest shadow-sm hover:scale-[1.02] transition-transform">
+<span class="material-symbols-outlined text-primary" style="font-variation-settings: 'FILL' 0;">favorite</span>
+<span class="text-sm font-semibold">1.2k</span>
+</button>
+<button class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-surface-container-lowest shadow-sm hover:scale-[1.02] transition-transform">
+<span class="material-symbols-outlined text-primary">bookmark</span>
+<span class="text-sm font-semibold">Save</span>
+</button>
+<button class="p-2.5 rounded-full bg-surface-container-lowest shadow-sm hover:scale-[1.02] transition-transform">
+<span class="material-symbols-outlined">share</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Content Area: The Digital Atelier Style -->
+<article class="grid grid-cols-12 gap-12 mb-24">
+<div class="col-span-8">
+<div class="prose prose-stone max-w-none font-body text-lg leading-relaxed text-on-surface-variant space-y-8">
+<p class="text-2xl font-medium text-on-surface leading-normal italic">
+                            "Type is the voice of the interface. Before a user reads a single word, they feel the character of the message through the geometry of its letters."
+                        </p>
+<p>
+                            In modern brand systems, we often treat typography as a secondary utility—a vessel for content rather than the content itself. However, when we look at the most enduring identities, typography serves as the structural scaffolding.
+                        </p>
+<div class="rounded-xl overflow-hidden my-12 bg-surface-container-highest">
+<img alt="Typography concept" data-alt="Close up of high-end editorial graphic design featuring bold black serifs on textured off-white paper" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAJr1Xp3srHwaUi8JDa0wLuq77rj247ugJKH3KT4RIA8CijXUkzZ_eO8g7u0kDlzaZwC5BNeaZ2qAOZTlLppvm92zUnRR8xHcZIXWXtIXK6zbU6d4dD70H1pvPub477gn20Fs82N-WrbH0lUGJXDMMK0odPtmcuQzVKNIadAHyO_VaLgGy8rxEYl3S2If6CNnUBf1aVeAa_U7XklEmHUSfLGA827HQ0XXogSAKDuwe3OnU2Z1JDmMetG-YznoYWqe0Xcxd7IMUSdlA"/>
+<div class="p-4 bg-surface-container text-xs text-center italic text-on-surface-variant">
+                                Visualizing spatial hierarchy through variable font weights.
+                            </div>
+</div>
+<h3 class="text-3xl font-black text-on-surface tracking-tight mt-12 mb-6">The Rule of Three</h3>
+<p>
+                            A resilient system typically relies on three distinct typographic roles: The Anchor (Headline), The Navigator (Labels), and The Conversationalist (Body). 
+                        </p>
+<ul class="space-y-4 list-disc pl-6">
+<li><strong>The Anchor:</strong> High contrast, distinctive geometry, and tight tracking.</li>
+<li><strong>The Navigator:</strong> Monospaced or highly legible sans-serifs with generous tracking.</li>
+<li><strong>The Conversationalist:</strong> Optical sizing specifically tuned for long-form reading.</li>
+</ul>
+</div>
+</div>
+<!-- Sidebar Info / Glassmorphism Elements -->
+<div class="col-span-4 space-y-8">
+<div class="bg-surface-container p-8 rounded-xl sticky top-24">
+<h4 class="font-headline font-bold text-lg mb-6">Key Takeaways</h4>
+<ul class="space-y-6">
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold shrink-0">1</span>
+<p class="text-sm text-on-surface-variant">Prioritize vertical rhythm over absolute font sizes.</p>
+</li>
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold shrink-0">2</span>
+<p class="text-sm text-on-surface-variant">Use optical sizing for body text under 14px.</p>
+</li>
+<li class="flex gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center text-xs font-bold shrink-0">3</span>
+<p class="text-sm text-on-surface-variant">Avoid pure black text on light backgrounds to reduce eye strain.</p>
+</li>
+</ul>
+<div class="mt-10 pt-8 border-t border-outline-variant/20">
+<p class="font-label text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-4">RESOURCES INCLUDED</p>
+<div class="space-y-3">
+<div class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg hover:bg-white transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-tertiary">description</span>
+<span class="text-sm font-medium">Typography_Audit.pdf</span>
+</div>
+<div class="flex items-center gap-3 p-3 bg-surface-container-lowest rounded-lg hover:bg-white transition-colors cursor-pointer">
+<span class="material-symbols-outlined text-primary">collections</span>
+<span class="text-sm font-medium">Style_Guide_Template</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</article>
+<!-- Comment Section: Clean & Structured -->
+<section class="max-w-3xl border-t border-outline-variant/15 pt-16">
+<div class="flex items-center justify-between mb-10">
+<h3 class="text-2xl font-black text-on-surface tracking-tight">Thoughts &amp; Discussions (24)</h3>
+<div class="flex items-center gap-2 text-sm text-on-surface-variant font-medium">
+<span>Newest first</span>
+<span class="material-symbols-outlined">expand_more</span>
+</div>
+</div>
+<!-- Input Box -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm mb-12">
+<div class="flex gap-4">
+<div class="w-10 h-10 rounded-full bg-primary-container overflow-hidden shrink-0">
+<img alt="Your Avatar" data-alt="User profile placeholder" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg2PLHH-onup8v3Y0vmB0FPuX0U_jYp5yd2op_UjsETWQT-k1phC995jA7rihDpi-oK9ALEn3Q1K0pAOQQdjlQdTpSNt5H5FwAgf6-eefrcuMH3RVstPXEXfeE54TpeABIVx2H2AHRWoPXSHUnATXmvDxNS4o1I-FrXn_w0RDAv6Fqog3vqn7Yp20ZeIrf_OqexlcxQkdhCfruFGrp67u94jZd6osxSe0bXhTXMZ7fV97zw7aBGeSv3uIDAY2ZxDJ1F9ciNgmxSWk"/>
+</div>
+<textarea class="w-full bg-transparent border-none focus:ring-0 text-sm font-inter placeholder:text-stone-400 min-h-[80px] resize-none" placeholder="Add your perspective..."></textarea>
+</div>
+<div class="flex justify-end mt-4">
+<button class="bg-primary text-on-primary px-6 py-2 rounded-full font-bold text-sm transition-transform hover:scale-105 active:scale-95">
+                            Post Comment
+                        </button>
+</div>
+</div>
+<!-- Comment Thread -->
+<div class="space-y-10">
+<!-- Comment 1 -->
+<div class="flex gap-6">
+<div class="w-12 h-12 rounded-full bg-secondary-fixed shrink-0 overflow-hidden">
+<img alt="Commenter" data-alt="Modern portrait of a young man with a creative haircut in a light studio setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIxlRh50-7c03NhcTdYpvD5phnXHtoNNJgt3YWBepmf0EStOS_Bex_lFn4EiBPb0pEnMgsgS6fslDTHfVwxXE22DVJ6MXu6j-aPD35R-RuW4YKtBDlvTeSyOqggGiReJ0Ms4kLYXylmWpsJwwXeIXQt9hOusiPcZ4eckjJb5_Bxp8ekZpPeSkjDMF1hKpBbfIrPBge0loVcuM6hhN0ols_rDfBAPHVS7xmNnR0iCk-AFF388a2LOz4uRLMXmb6Oapo3Nn5BrhMllc"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-3 mb-2">
+<span class="font-bold text-on-surface">Marcus Thorne</span>
+<span class="text-xs text-on-surface-variant">2 hours ago</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed mb-4">
+                                This editorial approach to type is exactly what's missing in most B2B SaaS today. The idea of the "Conversationalist" vs "Navigator" clarifies why some UIs feel so disjointed.
+                            </p>
+<div class="flex items-center gap-6 text-xs font-bold text-on-surface-variant">
+<button class="flex items-center gap-1 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">thumb_up</span>
+                                    12
+                                </button>
+<button class="flex items-center gap-1 hover:text-primary transition-colors">
+                                    Reply
+                                </button>
+</div>
+</div>
+</div>
+<!-- Comment 2 -->
+<div class="flex gap-6">
+<div class="w-12 h-12 rounded-full bg-tertiary-fixed shrink-0 overflow-hidden">
+<img alt="Commenter" data-alt="Close-up of a young woman's face with a natural expression and soft daylight" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA73iTFFtWlChrFpb_OH5khpKgl8mSwSI-1LUYFPzfTujFdPciHdAhGGFhIexAH91TKQWAWE3zxIjTxlL8BTnRdNAKPoCxaqwqXvE2yzbaXeUXErMZb6IYtpliqKrF5pE5qz2dbRWmxQq6qvou4GxjIhzx0tqgzwo85rSivv_5Y5R9F_9ThjeNR7nEgxcrBicb_hRUKMffmpvWM5ZY29wWtg_Sr_4dHTt47zUc1cUXaeX8dmsfLitSM8ru0c-JiXB2uuu09UdFe6xQ"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-3 mb-2">
+<span class="font-bold text-on-surface">Elena S.</span>
+<span class="text-xs text-on-surface-variant">5 hours ago</span>
+</div>
+<p class="text-on-surface-variant leading-relaxed mb-4">
+                                Would love to see a follow-up on how this affects accessibility. Sometimes "Editorial" means low contrast—how do we balance the atelier vibe with AA standards?
+                            </p>
+<div class="flex items-center gap-6 text-xs font-bold text-on-surface-variant">
+<button class="flex items-center gap-1 hover:text-primary transition-colors">
+<span class="material-symbols-outlined text-lg">thumb_up</span>
+                                    4
+                                </button>
+<button class="flex items-center gap-1 hover:text-primary transition-colors">
+                                    Reply
+                                </button>
+</div>
+</div>
+</div>
+</div>
+<button class="w-full mt-16 py-4 border border-outline-variant/30 rounded-xl font-bold text-on-surface-variant hover:bg-surface-container transition-colors">
+                    Load More Discussions
+                </button>
+</section>
+</div>
+</main>
+<!-- Contextual FAB Suppression: FAB is not rendered on Detail screens per guidelines -->
+</body></html>

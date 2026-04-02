@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillCache | Digital Atelier</title>
+<!-- Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Google Fonts: Manrope & Inter -->
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&amp;family=Manrope:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#326943",
+                        "on-primary": "#ffffff",
+                        "surface-container-highest": "#e6e3d0",
+                        "surface": "#fdfae6",
+                        "on-background": "#1c1c11",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#02210f",
+                        "secondary-container": "#c5e9cb",
+                        "surface-bright": "#fdfae6",
+                        "inverse-surface": "#313124",
+                        "primary-fixed": "#b4f1c0",
+                        "on-secondary-fixed-variant": "#2f4d37",
+                        "surface-container-low": "#f7f4e1",
+                        "on-surface-variant": "#414941",
+                        "surface-dim": "#dddbc8",
+                        "outline-variant": "#c0c9be",
+                        "tertiary": "#8d4a58",
+                        "secondary-fixed": "#c8ebcd",
+                        "primary-fixed-dim": "#99d4a5",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#ffaaba",
+                        "on-secondary-container": "#4a6a52",
+                        "on-primary-fixed": "#00210c",
+                        "background": "#fdfae6",
+                        "outline": "#717970",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#accfb2",
+                        "on-tertiary-fixed-variant": "#713341",
+                        "inverse-on-surface": "#f4f1de",
+                        "on-error-container": "#93000a",
+                        "secondary": "#46654e",
+                        "surface-container": "#f1eedb",
+                        "tertiary-fixed-dim": "#ffb1c0",
+                        "surface-variant": "#e6e3d0",
+                        "primary": "#326943",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#94cfa0",
+                        "on-primary-fixed-variant": "#18512d",
+                        "inverse-primary": "#99d4a5",
+                        "on-surface": "#1c1c11",
+                        "tertiary-fixed": "#ffd9de",
+                        "on-tertiary-fixed": "#3a0717",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#215934",
+                        "surface-container-high": "#ebe9d6",
+                        "on-tertiary-container": "#7b3b4a"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope", "sans-serif"],
+                        "body": ["Inter", "sans-serif"],
+                        "label": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        /* Custom "Atelier" texture for background */
+        .bg-atelier {
+            background-color: #fdfae6;
+            background-image: radial-gradient(rgba(50, 105, 67, 0.03) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+    </style>
+</head>
+<body class="bg-atelier text-on-surface font-body min-h-screen flex items-center justify-center overflow-hidden">
+<!-- Splash Screen Container -->
+<main class="relative w-full max-w-lg mx-auto flex flex-col items-center justify-center p-8">
+<!-- Subtle Organic Background Element -->
+<div class="absolute -z-10 top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-primary-container/20 blur-[100px]"></div>
+<!-- Identity Cluster -->
+<div class="flex flex-col items-center text-center">
+<!-- Icon/Mark -->
+<div class="mb-10 p-5 bg-surface-container-lowest rounded-xl shadow-sm">
+<span class="material-symbols-outlined text-5xl text-primary" data-icon="brush">brush</span>
+</div>
+<!-- Brand Name -->
+<h1 class="font-headline text-7xl font-extrabold text-primary tracking-tighter mb-4">
+                SkillCache
+            </h1>
+<!-- Tagline with Editorial Spacing -->
+<p class="font-label text-on-surface-variant tracking-[0.2em] text-sm uppercase">
+                Digital Atelier
+            </p>
+<!-- Decorative Divider - Tonal Transition Style -->
+<div class="w-12 h-[2px] bg-outline-variant/30 my-12 rounded-full"></div>
+<!-- Loading Indicator / Soft Entry Message -->
+<div class="space-y-6">
+<div class="flex items-center justify-center space-x-2">
+<div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div>
+<span class="font-label text-xs text-on-surface-variant font-medium tracking-wide">CURATING YOUR EXPERIENCE</span>
+</div>
+</div>
+</div>
+<!-- Footer / Credits -->
+<div class="fixed bottom-12 left-0 w-full px-8 flex flex-col md:flex-row justify-between items-center opacity-60 text-xs font-label">
+<span class="mb-2 md:mb-0">© 2024 SkillCache Exchange</span>
+<div class="flex space-x-6">
+<a class="hover:text-primary transition-colors" href="#">Manifesto</a>
+<a class="hover:text-primary transition-colors" href="#">Guidelines</a>
+</div>
+</div>
+</main>
+<!-- Background Imagery (Asymmetric Editorial Style) -->
+<div class="hidden lg:block fixed -bottom-20 -left-20 w-80 h-96 rounded-xl rotate-12 bg-surface-container-highest/50 p-4 border border-outline-variant/10">
+<img alt="Co-working creative space" class="w-full h-full object-cover rounded-lg" data-alt="Close up of a minimalist architectural studio with natural light, blueprints, and soft mint green accents in a professional setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB9Tgg_2xt2mdMC4XnKECmcTWuWp0OTI5SzQ7PM7IjRTCb_HKz2YpFVP5S6BzEJofusIZEO3lw3s6r1UTIrJm5hFPvkF4HRU0wMGx3SZuu9iE8xcnHjl2yobUdY99ZcTmdKVJS9qoJwuJ-8GUx3v1m79BPvT0HFe5uqAt5uz8PmnM8vstiVnAhkVtmqYwnngSh0wxJWnW_fdoQjX0U-mJHXiUbG3Kf-PM3cuDtUKsBOFORoUd7-5jmf4EwHRwMWsMPrmNDjP-kOOEg"/>
+</div>
+<div class="hidden lg:block fixed -top-20 -right-20 w-64 h-80 rounded-xl -rotate-12 bg-surface-container-highest/50 p-4 border border-outline-variant/10">
+<img alt="Artistic workspace" class="w-full h-full object-cover rounded-lg" data-alt="An abstract high-end artistic workshop with clay textures, wooden tools, and warm ambient sunlight creating soft shadows on a table" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRl6qo2YcKROFHIHF4aS6BtMt1gakIGT9ju3VSWu0gMxBE4VCMlwYDL3T912bUNSLQb9x-_Iy2WvOfEsQQzHDWUEB1EyUV4jTMCZrkzkswqJBUC_mSgMy445tpHbILtgji3QS1Wr16ukbeCxugALThCnJ5gL4rrODU9_fJyKy4b2Xm9MZiNOP19Kf86LYSAcejQ9lgGoXHbWsMjOqRi0wb6m7zNavwQWQY-iTevZMYPI2-jaryJcZtVqs_IJLEbRVbuUjke3Qr8jM"/>
+</div>
+</body></html>

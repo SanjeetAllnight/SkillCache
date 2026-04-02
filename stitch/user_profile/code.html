@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillCache | Profile</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-tint": "#326943",
+            "on-primary": "#ffffff",
+            "surface-container-highest": "#e6e3d0",
+            "surface": "#fdfae6",
+            "on-background": "#1c1c11",
+            "on-secondary": "#ffffff",
+            "on-secondary-fixed": "#02210f",
+            "secondary-container": "#c5e9cb",
+            "surface-bright": "#fdfae6",
+            "inverse-surface": "#313124",
+            "primary-fixed": "#b4f1c0",
+            "on-secondary-fixed-variant": "#2f4d37",
+            "surface-container-low": "#f7f4e1",
+            "on-surface-variant": "#414941",
+            "surface-dim": "#dddbc8",
+            "outline-variant": "#c0c9be",
+            "tertiary": "#8d4a58",
+            "secondary-fixed": "#c8ebcd",
+            "primary-fixed-dim": "#99d4a5",
+            "on-error": "#ffffff",
+            "tertiary-container": "#ffaaba",
+            "on-secondary-container": "#4a6a52",
+            "on-primary-fixed": "#00210c",
+            "background": "#fdfae6",
+            "outline": "#717970",
+            "surface-container-lowest": "#ffffff",
+            "secondary-fixed-dim": "#accfb2",
+            "on-tertiary-fixed-variant": "#713341",
+            "inverse-on-surface": "#f4f1de",
+            "on-error-container": "#93000a",
+            "secondary": "#46654e",
+            "surface-container": "#f1eedb",
+            "tertiary-fixed-dim": "#ffb1c0",
+            "surface-variant": "#e6e3d0",
+            "primary": "#326943",
+            "error-container": "#ffdad6",
+            "primary-container": "#94cfa0",
+            "on-primary-fixed-variant": "#18512d",
+            "inverse-primary": "#99d4a5",
+            "on-surface": "#1c1c11",
+            "tertiary-fixed": "#ffd9de",
+            "on-tertiary-fixed": "#3a0717",
+            "error": "#ba1a1a",
+            "on-tertiary": "#ffffff",
+            "on-primary-container": "#215934",
+            "surface-container-high": "#ebe9d6",
+            "on-tertiary-container": "#7b3b4a"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    body { font-family: 'Inter', sans-serif; }
+    h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+  </style>
+</head>
+<body class="bg-surface text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- Side Navigation -->
+<aside class="hidden md:flex flex-col h-screen w-64 fixed left-0 top-0 bg-[#fdfae6] py-8 px-6 z-50">
+<div class="mb-12">
+<span class="text-2xl font-black text-[#326943] tracking-tighter">SkillCache</span>
+<p class="text-xs text-stone-500 font-medium mt-1">Digital Atelier</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 font-medium hover:bg-[#f1eedb] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 font-medium hover:bg-[#f1eedb] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="diversity_3">diversity_3</span>
+<span>Find Mentors</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 font-medium hover:bg-[#f1eedb] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="calendar_today">calendar_today</span>
+<span>Sessions</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 font-medium hover:bg-[#f1eedb] transition-colors" href="#">
+<span class="material-symbols-outlined" data-icon="folder_open">folder_open</span>
+<span>Repository</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-[#326943] font-bold border-r-4 border-[#326943] bg-[#f1eedb]/50 translate-x-1 transition-all duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span>
+<span>Profile</span>
+</a>
+</nav>
+<div class="mt-auto">
+<button class="w-full py-4 bg-gradient-to-br from-[#326943] to-[#94cfa0] text-white rounded-xl font-bold shadow-lg shadow-primary/10 hover:-translate-y-0.5 transition-all">
+        Share a Skill
+      </button>
+</div>
+</aside>
+<!-- Top AppBar -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-16rem)] h-16 z-40 bg-[#fdfae6]/80 backdrop-blur-xl flex justify-between items-center px-6 md:px-12">
+<div class="flex items-center gap-4 bg-surface-container rounded-full px-4 py-2 w-full max-w-md">
+<span class="material-symbols-outlined text-outline" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm w-full placeholder:text-stone-400" placeholder="Search mentorships..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex gap-4">
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<button class="hidden lg:block px-5 py-2 bg-primary-container text-on-primary-container rounded-full font-semibold text-sm hover:opacity-90">
+        New Session
+      </button>
+<div class="h-10 w-10 rounded-full bg-surface-container overflow-hidden">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="professional headshot of a friendly creative director in a bright minimalist studio setting with soft natural light" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDVvXK6Y00p53lDtAW98OIC_7rUNhSNDMKNtICCCHJd2jvNGSU9DfvoVeCs93-D6XwdnY5NJmePo_ho458O38d3LrI86klzn4UYUGvHWeT0-1JKOLkiWnj2FdkifxFCxIobux1yvjtOLJpfN3Q6PSREFp_0gTxcmlAEaSNrYY4Oe22-ix82zdXLcPcLJeXBT9YI1pGnmod4J7mS0cmHvkfxnVksIKwW2BM1YWF3GzOzTOhBLdeyP3d1nfSfN9U9id2iIRvN1MYizpU"/>
+</div>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pt-24 pb-12 px-6 md:pl-72 md:pr-12 min-h-screen">
+<!-- Hero Section / Editorial Profile Header -->
+<section class="max-w-6xl mx-auto mb-20">
+<div class="relative group">
+<div class="h-64 md:h-80 w-full rounded-xl overflow-hidden bg-surface-container">
+<img alt="Cover" class="w-full h-full object-cover opacity-80" data-alt="abstract flowing organic shapes in shades of sage green and soft cream with a grainy paper texture" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDhXHwghWp8PHrhx40pSvhPrMAH_VX3MvIW2VQMv9zVYeAkIxUOjhdqolXkoTH3qbuILu-4RMILwt1KVBd0Kmm9C-2tmHwVe2uEtVHk2gcsXjLmwF2DHM0HcHq4PSobJBhYmXdYqpriEyi_9_0jWPeZFRZy35LLHmKuyh8fwiEJdEWk3MYo8bInwkkNobe0mu0PiCR4so5G73zcw3Vw3WLQ7o6WpaC3LbWr7mxFiZZHAXWnDAq-DVkiLpiN0dJ-f2NzNKDact1JUqQ"/>
+</div>
+<div class="absolute -bottom-16 left-8 md:left-12 flex flex-col md:flex-row items-end gap-6">
+<div class="h-32 w-32 md:h-44 md:w-44 rounded-xl border-4 border-surface bg-surface-container-lowest overflow-hidden shadow-xl">
+<img alt="Profile Photo" class="w-full h-full object-cover" data-alt="close up professional portrait of a creative professional with a warm smile in a high-end minimalist environment" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA9FnFgAF-ssvA4kUMskWJ6uJWeLAnSX5BOYb4kLb2VrVQZIf-e3cqgPHyE86-ZZeS0WOXMe90KrmoiIhVW5exgYNBVAZVdyHrytr6FsRncaJkf50DG3YyuzPi-9SlvdQ79C9ErV9WVgvC_X6hpC9GmFX5FtDUjgXDWcls1mk6r_bmXa4qHCjyKGP4nZukViXgHuuTPxkU_HkHbOccxYBNayNLCXs3_DFankK9ayaUEWGDk5idqiyggbW3-nJ6_Se_Ab5yL6d6zPPI"/>
+</div>
+<div class="mb-2">
+<div class="flex items-center gap-2 mb-1">
+<h1 class="text-3xl md:text-5xl font-black tracking-tighter text-on-surface">Julian Thorne</h1>
+<span class="material-symbols-outlined text-primary" data-icon="verified" style="font-variation-settings: 'FILL' 1;">verified</span>
+</div>
+<p class="text-stone-500 font-medium flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="location_on">location_on</span>
+              Berlin, DE • Creative Lead @ Atelier-X
+            </p>
+</div>
+</div>
+</div>
+</section>
+<!-- Content Grid -->
+<div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 md:gap-12">
+<!-- Left Column: Identity & Bio -->
+<div class="lg:col-span-4 space-y-12">
+<div class="space-y-4">
+<h2 class="text-xs uppercase tracking-[0.2em] font-bold text-stone-400">The Narrative</h2>
+<p class="text-lg leading-relaxed font-body text-on-surface-variant">
+            Blending architectural precision with modern UI systems. I believe that the best products are "quiet"—they solve problems without shouting. Currently focusing on modular design systems and generative aesthetics.
+          </p>
+<div class="flex items-center gap-4 py-4">
+<div class="flex -space-x-3">
+<div class="h-10 w-10 rounded-full border-2 border-surface bg-surface-container overflow-hidden">
+<img alt="Connection" data-alt="headshot of a young woman professional in a creative studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC2reQ8uabfK_DTDA-bOgNf7RcWrGeReYqWRTFqyqH5P3AYsxqM9ewNSmINek94iuX6DWPqkQCRD9GTlidu9XldMwj3pmvBzA2X0zQfxfiTNCvRLehqfep7oK-00yNfX8val83zIJs5EhsA_KsnHjnz0pUNq4DfOORQgjaHZ18tNaNLmELAC_Fje9D16iKQWiuAikC8Bendcj6pkTL2RBbJh5vHrFZC6fQfwjnB2moK_Y0YFmgV_y614nTUrMZnF7nYaELMcWWfxYc"/>
+</div>
+<div class="h-10 w-10 rounded-full border-2 border-surface bg-surface-container overflow-hidden">
+<img alt="Connection" data-alt="headshot of a designer in a casual workplace" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAcuJ3g6VJ8LTvvRJiLIRaF2OydQBKMR9xr9r3weBHDqI-fltV6x_2FM5NWDa0vJFGbHM635SHWJd9VTZioXIQgjIMu5fzAMTuTm-8DyPfs0-8wFH3TGhlyvQMfTyKf-DVj-ENryw0igaZ3sev1wpdaZT7MErsMGUmyyVUuJZYG12ws21_B_f7tXF4sCEVm04eevlqzMkG4_QezSI6roOIqNh3k9yzPqsC9Q9Ms2X362O4z5huChaS9T2IoQP1mTZ8Bjp3Joe-aftQ"/>
+</div>
+<div class="h-10 w-10 rounded-full border-2 border-surface bg-primary-container flex items-center justify-center text-[10px] font-bold text-on-primary-container">
+                +42
+              </div>
+</div>
+<span class="text-sm font-medium text-stone-500">Mentored 44+ artisans</span>
+</div>
+</div>
+<div class="bg-surface-container-low rounded-xl p-8 space-y-6">
+<h2 class="text-xs uppercase tracking-[0.2em] font-bold text-stone-400">Vitality</h2>
+<div class="grid grid-cols-2 gap-6">
+<div class="space-y-1">
+<span class="text-3xl font-black text-primary">4.9</span>
+<p class="text-xs font-bold text-stone-500 uppercase">Avg Rating</p>
+</div>
+<div class="space-y-1">
+<span class="text-3xl font-black text-primary">128</span>
+<p class="text-xs font-bold text-stone-500 uppercase">Sessions</p>
+</div>
+<div class="space-y-1">
+<span class="text-3xl font-black text-primary">340h</span>
+<p class="text-xs font-bold text-stone-500 uppercase">Total Hours</p>
+</div>
+<div class="space-y-1">
+<span class="text-3xl font-black text-primary">1.2k</span>
+<p class="text-xs font-bold text-stone-500 uppercase">Connections</p>
+</div>
+</div>
+</div>
+<div class="space-y-4">
+<h2 class="text-xs uppercase tracking-[0.2em] font-bold text-stone-400">Connect</h2>
+<div class="flex gap-3">
+<a class="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="language">language</span>
+</a>
+<a class="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="alternate_email">alternate_email</span>
+</a>
+<a class="h-12 w-12 rounded-full bg-surface-container flex items-center justify-center text-primary hover:bg-primary hover:text-white transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="share">share</span>
+</a>
+</div>
+</div>
+</div>
+<!-- Right Column: Skills & Badges (Bento Style) -->
+<div class="lg:col-span-8 space-y-12">
+<!-- Skills Section -->
+<div class="space-y-6">
+<div class="flex justify-between items-end">
+<h2 class="text-xs uppercase tracking-[0.2em] font-bold text-stone-400">The Arsenal</h2>
+<button class="text-sm font-bold text-primary flex items-center gap-1">
+              View All <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+<!-- Skill Card 1 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm hover:shadow-md transition-all group">
+<div class="flex justify-between items-start mb-4">
+<div class="h-12 w-12 rounded-lg bg-secondary-container flex items-center justify-center text-on-secondary-container">
+<span class="material-symbols-outlined" data-icon="architecture">architecture</span>
+</div>
+<span class="text-xs font-bold px-3 py-1 bg-surface-container rounded-full text-stone-500">Expert</span>
+</div>
+<h3 class="text-xl font-bold mb-2">Systems Design</h3>
+<p class="text-sm text-stone-500 mb-4">Architecting scalable UI languages for complex enterprise ecosystems.</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Tokens</span>
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Figma</span>
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Documentation</span>
+</div>
+</div>
+<!-- Skill Card 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-xl shadow-sm hover:shadow-md transition-all group">
+<div class="flex justify-between items-start mb-4">
+<div class="h-12 w-12 rounded-lg bg-primary-container flex items-center justify-center text-on-primary-container">
+<span class="material-symbols-outlined" data-icon="code">code</span>
+</div>
+<span class="text-xs font-bold px-3 py-1 bg-surface-container rounded-full text-stone-500">Advanced</span>
+</div>
+<h3 class="text-xl font-bold mb-2">Frontend Craft</h3>
+<p class="text-sm text-stone-500 mb-4">Translating high-fidelity visions into semantic, performant codebases.</p>
+<div class="flex flex-wrap gap-2">
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Tailwind</span>
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">React</span>
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed-variant text-[10px] font-bold rounded-full uppercase tracking-wider">Vellum</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Badges Section (The "Atelier Hall") -->
+<div class="space-y-6">
+<h2 class="text-xs uppercase tracking-[0.2em] font-bold text-stone-400">Accolades</h2>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+<!-- Badge 1 -->
+<div class="flex flex-col items-center text-center gap-3 group">
+<div class="h-24 w-24 rounded-full bg-surface-container-highest flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105">
+<div class="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent"></div>
+<span class="material-symbols-outlined text-4xl text-primary" data-icon="trophy" style="font-variation-settings: 'FILL' 1;">trophy</span>
+</div>
+<div class="space-y-0.5">
+<h4 class="text-sm font-bold">Top Mentor</h4>
+<p class="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">Q4 2023</p>
+</div>
+</div>
+<!-- Badge 2 -->
+<div class="flex flex-col items-center text-center gap-3 group">
+<div class="h-24 w-24 rounded-full bg-surface-container-highest flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105">
+<div class="absolute inset-0 bg-gradient-to-tr from-tertiary/10 to-transparent"></div>
+<span class="material-symbols-outlined text-4xl text-tertiary" data-icon="auto_awesome" style="font-variation-settings: 'FILL' 1;">auto_awesome</span>
+</div>
+<div class="space-y-0.5">
+<h4 class="text-sm font-bold">Skill Sage</h4>
+<p class="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">100+ Shares</p>
+</div>
+</div>
+<!-- Badge 3 -->
+<div class="flex flex-col items-center text-center gap-3 group">
+<div class="h-24 w-24 rounded-full bg-surface-container-highest flex items-center justify-center relative overflow-hidden transition-transform group-hover:scale-105">
+<div class="absolute inset-0 bg-gradient-to-tr from-secondary/10 to-transparent"></div>
+<span class="material-symbols-outlined text-4xl text-secondary" data-icon="handshake" style="font-variation-settings: 'FILL' 1;">handshake</span>
+</div>
+<div class="space-y-0.5">
+<h4 class="text-sm font-bold">Connector</h4>
+<p class="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">Network Builder</p>
+</div>
+</div>
+<!-- Badge 4 -->
+<div class="flex flex-col items-center text-center gap-3 group opacity-40 grayscale">
+<div class="h-24 w-24 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center relative overflow-hidden">
+<span class="material-symbols-outlined text-4xl text-outline-variant" data-icon="lock">lock</span>
+</div>
+<div class="space-y-0.5">
+<h4 class="text-sm font-bold text-stone-400">???</h4>
+<p class="text-[10px] text-stone-400 font-bold uppercase tracking-tighter">Locked</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Featured Exchange Card -->
+<div class="relative bg-surface-container p-8 md:p-12 rounded-xl overflow-hidden mt-12">
+<div class="absolute top-0 right-0 h-full w-1/3 opacity-10 pointer-events-none">
+<span class="material-symbols-outlined text-[200px] absolute -right-20 -top-20 text-primary" data-icon="brush">brush</span>
+</div>
+<div class="relative z-10 max-w-lg space-y-6">
+<span class="px-4 py-1.5 bg-primary-container text-on-primary-container text-xs font-black rounded-full uppercase tracking-widest">Active Exchange</span>
+<h2 class="text-3xl md:text-4xl font-black tracking-tighter">Creative Direction &amp; Design Philosophy</h2>
+<p class="text-on-surface-variant font-medium">Currently mentoring <span class="font-bold text-primary">Elena Rossi</span> on editorial layout strategies.</p>
+<div class="flex items-center gap-4">
+<button class="px-8 py-4 bg-primary text-white rounded-xl font-bold hover:opacity-90 transition-all flex items-center gap-2">
+                Join Studio <span class="material-symbols-outlined text-sm" data-icon="chevron_right">chevron_right</span>
+</button>
+<div class="h-12 w-12 rounded-full border-2 border-white/50 backdrop-blur-sm bg-white/20 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary" data-icon="videocam">videocam</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden fixed bottom-0 left-0 w-full bg-surface-container-lowest h-16 border-t border-outline-variant/10 flex justify-around items-center px-4 z-50">
+<a class="text-stone-400" href="#"><span class="material-symbols-outlined" data-icon="dashboard">dashboard</span></a>
+<a class="text-stone-400" href="#"><span class="material-symbols-outlined" data-icon="diversity_3">diversity_3</span></a>
+<a class="text-primary font-bold" href="#"><span class="material-symbols-outlined" data-icon="person" style="font-variation-settings: 'FILL' 1;">person</span></a>
+<a class="text-stone-400" href="#"><span class="material-symbols-outlined" data-icon="notifications">notifications</span></a>
+</nav>
+</body></html>

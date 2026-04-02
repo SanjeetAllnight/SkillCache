@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>SkillCache - Digital Atelier Session</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-tint": "#326943",
+              "on-primary": "#ffffff",
+              "surface-container-highest": "#e6e3d0",
+              "surface": "#fdfae6",
+              "on-background": "#1c1c11",
+              "on-secondary": "#ffffff",
+              "on-secondary-fixed": "#02210f",
+              "secondary-container": "#c5e9cb",
+              "surface-bright": "#fdfae6",
+              "inverse-surface": "#313124",
+              "primary-fixed": "#b4f1c0",
+              "on-secondary-fixed-variant": "#2f4d37",
+              "surface-container-low": "#f7f4e1",
+              "on-surface-variant": "#414941",
+              "surface-dim": "#dddbc8",
+              "outline-variant": "#c0c9be",
+              "tertiary": "#8d4a58",
+              "secondary-fixed": "#c8ebcd",
+              "primary-fixed-dim": "#99d4a5",
+              "on-error": "#ffffff",
+              "tertiary-container": "#ffaaba",
+              "on-secondary-container": "#4a6a52",
+              "on-primary-fixed": "#00210c",
+              "background": "#fdfae6",
+              "outline": "#717970",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed-dim": "#accfb2",
+              "on-tertiary-fixed-variant": "#713341",
+              "inverse-on-surface": "#f4f1de",
+              "on-error-container": "#93000a",
+              "secondary": "#46654e",
+              "surface-container": "#f1eedb",
+              "tertiary-fixed-dim": "#ffb1c0",
+              "surface-variant": "#e6e3d0",
+              "primary": "#326943",
+              "error-container": "#ffdad6",
+              "primary-container": "#94cfa0",
+              "on-primary-fixed-variant": "#18512d",
+              "inverse-primary": "#99d4a5",
+              "on-surface": "#1c1c11",
+              "tertiary-fixed": "#ffd9de",
+              "on-tertiary-fixed": "#3a0717",
+              "error": "#ba1a1a",
+              "on-tertiary": "#ffffff",
+              "on-primary-container": "#215934",
+              "surface-container-high": "#ebe9d6",
+              "on-tertiary-container": "#7b3b4a"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .video-container {
+            mask-image: linear-gradient(to bottom, black 95%, transparent 100%);
+        }
+    </style>
+</head>
+<body class="bg-surface font-body text-on-surface overflow-hidden h-screen flex">
+<!-- SideNavBar (Suppressed for focused Video Call task per "Destination Rule", but included as a "Shell" element if requested, but focused journeys prioritize the canvas. I will omit the sidebar to prioritize the Video Canvas as a focused task-page.) -->
+<main class="relative flex-1 flex flex-col items-center justify-center h-full bg-stone-950">
+<!-- Top Overlay: Session Info -->
+<header class="absolute top-0 left-0 right-0 z-20 flex justify-between items-center px-10 py-8 bg-gradient-to-b from-stone-950/60 to-transparent">
+<div class="flex items-center gap-4">
+<div class="h-10 w-10 rounded-full bg-primary flex items-center justify-center text-white font-headline font-bold">SC</div>
+<div>
+<h1 class="text-white font-headline font-bold text-lg leading-none">Pottery Throwing Masterclass</h1>
+<p class="text-stone-300 text-xs mt-1 font-medium">Session with Elena Vance • 42:15</p>
+</div>
+</div>
+<div class="flex items-center gap-3">
+<div class="bg-tertiary text-white text-[10px] uppercase tracking-widest px-2 py-1 rounded-full font-bold">Live</div>
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all group">
+<span class="material-symbols-outlined text-white text-xl">group</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center transition-all">
+<span class="material-symbols-outlined text-white text-xl">chat_bubble</span>
+</button>
+</div>
+</header>
+<!-- Main Video Stream -->
+<div class="absolute inset-0 w-full h-full z-0 overflow-hidden">
+<img alt="Main video feed of a mentor in a sunlit pottery studio working with clay" class="w-full h-full object-cover" data-alt="Close-up of a skilled artisan hands shaping a clay bowl on a pottery wheel in a sunlit workshop with soft dust particles" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEL9OACPN8uIset1cGoXBtWah-9oPgQs0uxn8r1QN_IWlStA3Zru2r6x9b6Q0N0cty0C7ic0vAQG3fiqGRju0D1ztr1jGfA2CDNcVmvo-ArAx7YVRpfWRajKPX3Etq8Ldl0qWRbj6odiVikyK1lQjqzCJjKNYNJzb25ovMFEzWg9dymBBPOX5UEsvSUVEUsvsDAcleERFlaliZGQUhUzWvL-uj-CoANhQpGNdagu9VFM6KdteLvL4ALYMYu4hnHIBhWPkDnc11NrA"/>
+</div>
+<!-- Picture-in-Picture (Self View) -->
+<div class="absolute bottom-32 right-10 w-48 h-64 rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 z-20 group">
+<img alt="Self view in small window" class="w-full h-full object-cover" data-alt="Portrait of a young man smiling in a brightly lit room with a clean minimalist background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCjDwx8AjpdXxQs-D9n0dPnbd6Zd2iz9ntQ0fKsl7eiD0BiE_yO21GD-7QMjJl4rBjTf0-j7wxfCWvPh_i_tPeEES0NP15-Ul8kkzh1yCr0-gqG_AbyFwwbM7ojAFTHh66436NR-H96Hjzcp5KEL1BMgAzocaPaWxKwZA5bPg1XRA7dEVSq_QY2stmbZUslkZxEpz_vz32pdHc38OXAsC1Vl_akX8e7hWvuCVy9n3LOudKfZorMbH_utsWXM01kSueaAgU3WOtuCBQ"/>
+<div class="absolute bottom-2 left-2 bg-stone-900/40 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] text-white">
+                You
+            </div>
+</div>
+<!-- Bottom Control Bar -->
+<nav class="absolute bottom-10 z-30 flex items-center gap-6 px-8 py-4 rounded-full bg-stone-900/80 backdrop-blur-2xl border border-white/10 shadow-2xl">
+<!-- Mute Toggle -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-active:scale-95">
+<span class="material-symbols-outlined text-white text-2xl">mic</span>
+</div>
+<span class="text-[10px] font-medium text-stone-400 uppercase tracking-tighter">Mute</span>
+</button>
+<!-- Camera Toggle -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-active:scale-95">
+<span class="material-symbols-outlined text-white text-2xl">videocam</span>
+</div>
+<span class="text-[10px] font-medium text-stone-400 uppercase tracking-tighter">Camera Toggle</span>
+</button>
+<!-- Screen Share -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-active:scale-95">
+<span class="material-symbols-outlined text-white text-2xl">present_to_all</span>
+</div>
+<span class="text-[10px] font-medium text-stone-400 uppercase tracking-tighter">Share</span>
+</button>
+<!-- Divider -->
+<div class="w-px h-10 bg-white/10 mx-2"></div>
+<!-- More Actions -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-14 h-14 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-all group-active:scale-95">
+<span class="material-symbols-outlined text-white text-2xl">more_horiz</span>
+</div>
+<span class="text-[10px] font-medium text-stone-400 uppercase tracking-tighter">Options</span>
+</button>
+<!-- End Call -->
+<button class="flex flex-col items-center gap-1 group">
+<div class="w-16 h-14 rounded-full bg-error hover:bg-red-700 flex items-center justify-center transition-all group-active:scale-95 px-6">
+<span class="material-symbols-outlined text-white text-2xl" style="font-variation-settings: 'FILL' 1;">call_end</span>
+</div>
+<span class="text-[10px] font-medium text-error uppercase tracking-tighter">End Call</span>
+</button>
+</nav>
+<!-- Connectivity Indicators (Floating Minimalist) -->
+<div class="absolute bottom-10 left-10 flex flex-col gap-3 z-20">
+<div class="flex items-center gap-2 bg-stone-900/40 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/5">
+<div class="w-2 h-2 rounded-full bg-[#326943]"></div>
+<span class="text-xs text-stone-300 font-medium">Connection Stable</span>
+</div>
+</div>
+<!-- Watermark / Brand Detail -->
+<div class="absolute top-10 right-10 text-white/20 font-headline font-black text-3xl tracking-tighter select-none pointer-events-none">
+            SkillCache
+        </div>
+</main>
+<!-- Contextual FAB (Suppressed for focused Video Session per logic) -->
+</body></html>

@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Sessions | SkillCache Digital Atelier</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&amp;family=Inter:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "surface-tint": "#326943",
+            "on-primary": "#ffffff",
+            "surface-container-highest": "#e6e3d0",
+            "surface": "#fdfae6",
+            "on-background": "#1c1c11",
+            "on-secondary": "#ffffff",
+            "on-secondary-fixed": "#02210f",
+            "secondary-container": "#c5e9cb",
+            "surface-bright": "#fdfae6",
+            "inverse-surface": "#313124",
+            "primary-fixed": "#b4f1c0",
+            "on-secondary-fixed-variant": "#2f4d37",
+            "surface-container-low": "#f7f4e1",
+            "on-surface-variant": "#414941",
+            "surface-dim": "#dddbc8",
+            "outline-variant": "#c0c9be",
+            "tertiary": "#8d4a58",
+            "secondary-fixed": "#c8ebcd",
+            "primary-fixed-dim": "#99d4a5",
+            "on-error": "#ffffff",
+            "tertiary-container": "#ffaaba",
+            "on-secondary-container": "#4a6a52",
+            "on-primary-fixed": "#00210c",
+            "background": "#fdfae6",
+            "outline": "#717970",
+            "surface-container-lowest": "#ffffff",
+            "secondary-fixed-dim": "#accfb2",
+            "on-tertiary-fixed-variant": "#713341",
+            "inverse-on-surface": "#f4f1de",
+            "on-error-container": "#93000a",
+            "secondary": "#46654e",
+            "surface-container": "#f1eedb",
+            "tertiary-fixed-dim": "#ffb1c0",
+            "surface-variant": "#e6e3d0",
+            "primary": "#326943",
+            "error-container": "#ffdad6",
+            "primary-container": "#94cfa0",
+            "on-primary-fixed-variant": "#18512d",
+            "inverse-primary": "#99d4a5",
+            "on-surface": "#1c1c11",
+            "tertiary-fixed": "#ffd9de",
+            "on-tertiary-fixed": "#3a0717",
+            "error": "#ba1a1a",
+            "on-tertiary": "#ffffff",
+            "on-primary-container": "#215934",
+            "surface-container-high": "#ebe9d6",
+            "on-tertiary-container": "#7b3b4a"
+          },
+          fontFamily: {
+            "headline": ["Manrope"],
+            "body": ["Inter"],
+            "label": ["Inter"]
+          },
+          borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+        },
+      },
+    }
+  </script>
+<style>
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+    body {
+      background-color: #fdfae6;
+      color: #1c1c11;
+    }
+  </style>
+</head>
+<body class="font-body selection:bg-primary-container selection:text-on-primary-container">
+<!-- SideNavBar Anchor -->
+<aside class="h-screen w-64 fixed left-0 top-0 bg-[#fdfae6] dark:bg-stone-950 flex flex-col py-8 px-6 z-50">
+<div class="mb-12">
+<h1 class="text-2xl font-black text-[#326943] dark:text-[#94CFA0] tracking-tighter font-headline">SkillCache</h1>
+<p class="text-xs text-stone-500 font-medium">Digital Atelier</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors group" href="#">
+<span class="material-symbols-outlined group-active:translate-x-1 duration-200" data-icon="dashboard">dashboard</span>
+<span class="font-manrope font-bold text-lg">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors group" href="#">
+<span class="material-symbols-outlined group-active:translate-x-1 duration-200" data-icon="diversity_3">diversity_3</span>
+<span class="font-manrope font-bold text-lg">Find Mentors</span>
+</a>
+<!-- Active State for Sessions Page -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-[#326943] dark:text-[#94CFA0] font-bold border-r-4 border-[#326943] transition-colors group" href="#">
+<span class="material-symbols-outlined group-active:translate-x-1 duration-200" data-icon="calendar_today">calendar_today</span>
+<span class="font-manrope font-bold text-lg">Sessions</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors group" href="#">
+<span class="material-symbols-outlined group-active:translate-x-1 duration-200" data-icon="folder_open">folder_open</span>
+<span class="font-manrope font-bold text-lg">Repository</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors group" href="#">
+<span class="material-symbols-outlined group-active:translate-x-1 duration-200" data-icon="person">person</span>
+<span class="font-manrope font-bold text-lg">Profile</span>
+</a>
+</nav>
+<div class="mt-auto">
+<button class="w-full bg-gradient-to-br from-[#326943] to-[#94CFA0] text-white py-4 rounded-xl font-bold hover:shadow-lg transition-all active:scale-95">
+        Share a Skill
+      </button>
+</div>
+</aside>
+<!-- TopNavBar Anchor -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 z-40 bg-[#fdfae6]/80 dark:bg-stone-950/80 backdrop-blur-xl flex justify-between items-center px-12 shadow-sm dark:shadow-none">
+<div class="flex items-center bg-surface-container-low px-4 py-2 rounded-full w-96">
+<span class="material-symbols-outlined text-stone-400 text-sm" data-icon="search">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-inter w-full text-on-surface" placeholder="Search sessions..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex gap-4">
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="notifications">notifications</span>
+</button>
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+</button>
+</div>
+<button class="bg-primary text-on-primary px-6 py-2 rounded-full font-semibold text-sm hover:opacity-90 transition-opacity">
+        New Session
+      </button>
+<div class="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-container">
+<img alt="User Avatar" class="w-full h-full object-cover" data-alt="professional male portrait with warm smile and soft studio lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDzsZAx5R2BsvwEDaDjw48hw_r8vk3lZsH0x05dHl3FH4-dNRDyGU0brBFdymmF12t-EU-1-Eb9rrFwZzRQqpYMh3NyyVVwwRWH9QH7Cek2JX8FozNsDIgJOvEk3_YDLE6UQ7K0awnGxnUB6XzPtWPqpLNdgBoKsGdnfGKH6bhUzo-5n0s2Ri7LwvrfD3EKwRiUrahoTA59TEQwaX3NgiABiwyC_OHKwbHehyVSxQwvAklfMpFzfzu9EaBRsqDtykHDxyGWmQvmqVg"/>
+</div>
+</div>
+</header>
+<!-- Main Content Area -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="max-w-6xl mx-auto px-12 py-16">
+<!-- Editorial Header -->
+<section class="mb-20">
+<h2 class="text-6xl font-headline font-extrabold tracking-tighter text-primary mb-4">Your Creative <br/>Exchange</h2>
+<p class="text-lg text-on-surface-variant max-w-xl font-body leading-relaxed">
+          Manage your upcoming ateliers and revisit past insights. Every session is a step closer to mastering your craft.
+        </p>
+</section>
+<!-- Live Now - Featured Bento Item -->
+<div class="mb-16">
+<div class="flex items-center gap-3 mb-6">
+<span class="w-3 h-3 rounded-full bg-tertiary animate-pulse"></span>
+<h3 class="text-sm font-bold uppercase tracking-widest text-on-surface-variant">Active Now</h3>
+</div>
+<div class="bg-surface-container-lowest rounded-xl p-8 flex flex-col md:flex-row items-center gap-8 shadow-[0_12px_40px_-5px_rgba(28,28,17,0.06)] group transition-all hover:-translate-y-1">
+<div class="w-full md:w-1/3 aspect-video rounded-lg overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" data-alt="close-up of digital artist hand using a stylus on a professional tablet with vibrant neon colors" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAgjRGdWb5n9Yc7ul6Y_nFysaQk1hJbd-Dayjxe3yp5EBlMqiZxAF4m-S2NBVMdQ_Hgf8aXGsF1aIhi14cB-Tbn3ybldkQ8bUbSfV6nPgVbGV2szNaUkHyMFT3BRcZoI3q3H5r9RJhwVIAW_jcWFbPVhkQy0TuqnJkl0-KBUM0jssL-XdWBdvWqNdGeXF2U6ZMTvrWj4OLjwaBc0B_KlAqUxPSJuCu12pKPQ2FIXbqE0gYOnbv99jX6Sr2CIS_6utO7SA1AMAsTzqc"/>
+</div>
+<div class="flex-1">
+<div class="flex items-center gap-2 mb-4">
+<span class="bg-secondary-container text-on-secondary-container text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-tighter">UI Design</span>
+<span class="text-tertiary font-bold text-xs uppercase">Live</span>
+</div>
+<h4 class="text-3xl font-headline font-bold text-on-surface mb-2">Mastering Organic Layouts</h4>
+<p class="text-on-surface-variant mb-6 font-body">Session with <strong>Elena Moretti</strong> • Started 15m ago</p>
+<div class="flex gap-4">
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-8 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition-all flex items-center gap-2">
+<span class="material-symbols-outlined text-sm" data-icon="videocam">videocam</span>
+                Join Session
+              </button>
+<button class="bg-surface-container-high text-on-surface-variant px-8 py-3 rounded-full font-bold hover:bg-surface-container-highest transition-colors">
+                Details
+              </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Session Lists -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-12">
+<!-- Upcoming Sessions -->
+<section>
+<div class="flex justify-between items-end mb-8">
+<h3 class="text-2xl font-headline font-bold text-on-surface">Upcoming</h3>
+<span class="text-sm font-medium text-stone-400">3 Sessions</span>
+</div>
+<div class="space-y-6">
+<!-- Item 1 -->
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h5 class="font-headline font-bold text-lg text-on-surface group-hover:text-primary transition-colors">Advanced Pottery Glazing</h5>
+<p class="text-sm text-on-surface-variant">Mentor: Julian Varkas</p>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-primary">Oct 24, 2023</p>
+<p class="text-xs text-stone-400">14:00 - 15:30</p>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-surface-container">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img alt="Mentor" data-alt="portrait of a man with spectacles in a bright art studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8boPBdFGP-IMbqNnk-JsknM7pCrLcRwZf9rRH-CsJVMwMfaeXlLno_QtphKXJozeo5Fp7lrcwogS1xzcuAId7rjYTxS_3N5yQIAygW1IL-KnwxZJTMSLlTUCbJOOcLY0VaaX5J3EAb-Kim2Fj6_Ohq0CVE40YQVz6zb46s3kBzue5zuZkWxeOPyME_z1zNBTGfA_PulbAc0AVkU2cdyCIE69QAzqXgt1nzXv8zAELrxah_uNHhwI2wE3K68cc7gDUxeEhWmtcM8U"/>
+</div>
+</div>
+<button class="text-primary font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+                  Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Item 2 -->
+<div class="bg-surface-container-lowest p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow group">
+<div class="flex justify-between items-start mb-4">
+<div>
+<h5 class="font-headline font-bold text-lg text-on-surface group-hover:text-primary transition-colors">Sustainable Dyeing Techniques</h5>
+<p class="text-sm text-on-surface-variant">Mentor: Sarah Chen</p>
+</div>
+<div class="text-right">
+<p class="text-xs font-bold text-primary">Oct 27, 2023</p>
+<p class="text-xs text-stone-400">10:00 - 11:30</p>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-surface-container">
+<div class="flex -space-x-2">
+<div class="w-8 h-8 rounded-full border-2 border-surface-container-lowest overflow-hidden">
+<img alt="Mentor" data-alt="portrait of a woman with braided hair and colorful scarf" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_yMrZmwUgCyW5CNB19aTrojBVlDHw-uJ0pjMsHsKBkYP0whYUOEWBU_p6uGIo8Nx0IfG2mR5srANlCFKSPHJYt-f0VTLbxitWLIoy9pJwJ8BCcSzB_GZKKa_6qg7P_Iibh3Z6y71XpraAvR7aS8lq6QCAto-lg47G9Wrp-Gm_VpfzlCVINQ6H1Cx4uvHyJycWsNWWs-Rmq3-84NCJh3rCzhfJ8SEyxCDLggW79hUP4w2VUh60oixooFiYUq2xcFKDWVWSFA9_bWM"/>
+</div>
+</div>
+<button class="text-primary font-bold text-sm flex items-center gap-1 hover:gap-2 transition-all">
+                  Details <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Completed Sessions -->
+<section>
+<div class="flex justify-between items-end mb-8">
+<h3 class="text-2xl font-headline font-bold text-on-surface">Past Sessions</h3>
+<span class="text-sm font-medium text-stone-400">View All</span>
+</div>
+<div class="space-y-6">
+<!-- Item 3 -->
+<div class="bg-surface-container-low p-6 rounded-lg opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h5 class="font-headline font-bold text-lg text-on-surface">Typographic Systems</h5>
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<p class="text-sm text-on-surface-variant">Mentor: Robert Glass</p>
+</div>
+<div class="text-right">
+<p class="text-xs font-medium text-stone-500">Oct 12, 2023</p>
+<span class="bg-surface-container-high px-2 py-0.5 rounded text-[10px] font-bold text-on-surface-variant uppercase">Completed</span>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant/20">
+<p class="text-xs italic text-on-surface-variant">"Great insights on grid fluidity."</p>
+<button class="bg-surface-container-lowest text-primary px-4 py-2 rounded-full font-bold text-xs hover:bg-white transition-colors border border-outline-variant/10">
+                  Review
+                </button>
+</div>
+</div>
+<!-- Item 4 -->
+<div class="bg-surface-container-low p-6 rounded-lg opacity-80 hover:opacity-100 transition-opacity">
+<div class="flex justify-between items-start mb-4">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<h5 class="font-headline font-bold text-lg text-on-surface">Foundations of Woodworking</h5>
+<span class="material-symbols-outlined text-primary text-sm" data-icon="check_circle" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+</div>
+<p class="text-sm text-on-surface-variant">Mentor: Marcus Thorne</p>
+</div>
+<div class="text-right">
+<p class="text-xs font-medium text-stone-500">Oct 05, 2023</p>
+<span class="bg-surface-container-high px-2 py-0.5 rounded text-[10px] font-bold text-on-surface-variant uppercase">Completed</span>
+</div>
+</div>
+<div class="flex justify-between items-center pt-4 border-t border-outline-variant/20">
+<p class="text-xs italic text-on-surface-variant">"Shared 2 resources with you."</p>
+<button class="bg-surface-container-lowest text-primary px-4 py-2 rounded-full font-bold text-xs hover:bg-white transition-colors border border-outline-variant/10">
+                  Repository
+                </button>
+</div>
+</div>
+</div>
+</section>
+</div>
+</div>
+</main>
+<!-- Contextual Floating Action Button -->
+<div class="fixed bottom-12 right-12">
+<button class="w-16 h-16 bg-primary text-on-primary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all group">
+<span class="material-symbols-outlined text-3xl group-hover:rotate-90 transition-transform duration-300" data-icon="add">add</span>
+</button>
+</div>
+</body></html>

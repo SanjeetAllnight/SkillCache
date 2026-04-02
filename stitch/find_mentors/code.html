@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Find Mentors | SkillCache</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface-tint": "#326943",
+              "on-primary": "#ffffff",
+              "surface-container-highest": "#e6e3d0",
+              "surface": "#fdfae6",
+              "on-background": "#1c1c11",
+              "on-secondary": "#ffffff",
+              "on-secondary-fixed": "#02210f",
+              "secondary-container": "#c5e9cb",
+              "surface-bright": "#fdfae6",
+              "inverse-surface": "#313124",
+              "primary-fixed": "#b4f1c0",
+              "on-secondary-fixed-variant": "#2f4d37",
+              "surface-container-low": "#f7f4e1",
+              "on-surface-variant": "#414941",
+              "surface-dim": "#dddbc8",
+              "outline-variant": "#c0c9be",
+              "tertiary": "#8d4a58",
+              "secondary-fixed": "#c8ebcd",
+              "primary-fixed-dim": "#99d4a5",
+              "on-error": "#ffffff",
+              "tertiary-container": "#ffaaba",
+              "on-secondary-container": "#4a6a52",
+              "on-primary-fixed": "#00210c",
+              "background": "#fdfae6",
+              "outline": "#717970",
+              "surface-container-lowest": "#ffffff",
+              "secondary-fixed-dim": "#accfb2",
+              "on-tertiary-fixed-variant": "#713341",
+              "inverse-on-surface": "#f4f1de",
+              "on-error-container": "#93000a",
+              "secondary": "#46654e",
+              "surface-container": "#f1eedb",
+              "tertiary-fixed-dim": "#ffb1c0",
+              "surface-variant": "#e6e3d0",
+              "primary": "#326943",
+              "error-container": "#ffdad6",
+              "primary-container": "#94cfa0",
+              "on-primary-fixed-variant": "#18512d",
+              "inverse-primary": "#99d4a5",
+              "on-surface": "#1c1c11",
+              "tertiary-fixed": "#ffd9de",
+              "on-tertiary-fixed": "#3a0717",
+              "error": "#ba1a1a",
+              "on-tertiary": "#ffffff",
+              "on-primary-container": "#215934",
+              "surface-container-high": "#ebe9d6",
+              "on-tertiary-container": "#7b3b4a"
+            },
+            fontFamily: {
+              "headline": ["Manrope"],
+              "body": ["Inter"],
+              "label": ["Inter"]
+            },
+            borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+            background-color: #fdfae6;
+            color: #1c1c11;
+        }
+    </style>
+</head>
+<body class="font-body selection:bg-primary-container/30">
+<!-- SideNavBar (Authority: JSON) -->
+<aside class="hidden md:flex flex-col h-full py-8 px-6 h-screen w-64 fixed left-0 top-0 bg-[#fdfae6] dark:bg-stone-950">
+<div class="mb-12">
+<h1 class="text-2xl font-black text-[#326943] dark:text-[#94CFA0] tracking-tighter">SkillCache</h1>
+<p class="text-xs uppercase tracking-widest text-stone-500 mt-1 font-bold">Digital Atelier</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-manrope font-bold text-lg">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-[#326943] dark:text-[#94CFA0] font-bold border-r-4 border-[#326943] bg-[#f1eedb] dark:bg-stone-800" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">diversity_3</span>
+<span class="font-manrope font-bold text-lg">Find Mentors</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-manrope font-bold text-lg">Sessions</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors" href="#">
+<span class="material-symbols-outlined">folder_open</span>
+<span class="font-manrope font-bold text-lg">Repository</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-stone-500 dark:text-stone-400 font-medium hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-manrope font-bold text-lg">Profile</span>
+</a>
+</nav>
+<div class="mt-auto">
+<button class="w-full py-4 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white font-bold text-sm shadow-xl shadow-primary/10 flex items-center justify-center gap-2 hover:-translate-y-0.5 transition-all">
+<span class="material-symbols-outlined text-lg">add</span>
+                Share a Skill
+            </button>
+</div>
+</aside>
+<!-- TopNavBar (Authority: JSON) -->
+<header class="fixed top-0 right-0 w-full md:w-[calc(100%-16rem)] h-16 z-40 bg-[#fdfae6]/80 dark:bg-stone-950/80 backdrop-blur-xl flex justify-between items-center px-6 md:px-12">
+<div class="flex items-center flex-1 max-w-xl">
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">search</span>
+<input class="w-full pl-12 pr-4 py-2 bg-surface-container-lowest border-none rounded-full text-sm font-inter focus:ring-1 focus:ring-primary transition-all" placeholder="Search mentors by craft, name, or skill..." type="text"/>
+</div>
+</div>
+<div class="flex items-center gap-6 ml-8">
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">settings</span>
+</button>
+<div class="h-8 w-px bg-surface-container mx-2"></div>
+<button class="bg-primary text-white px-5 py-2 rounded-full text-sm font-semibold hover:opacity-90 transition-opacity">
+                New Session
+            </button>
+<img alt="User Avatar" class="h-10 w-10 rounded-full object-cover border-2 border-primary-container" data-alt="close-up portrait of a professional man in a minimal studio setting with soft natural light and clean background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIQaAPS07SxePLmzhqt8IvW5thKCLw_shSYO58Aruf4wuWLeKe0r8Us9JiWQZho7TbxMnMikuhfEIGRBO5zvS1QTbom3SS9l9y9XJDx9ov1qDdibQLM9bmMzScHt10NOA7A8EIzwc2P4LY8mdhHkj5kcsMmGdTK6iG4qEM-Ow_nTzGNJbnGaFimiFWF3TjOT8VtMVacsPIzlDJK6GNlHDg1riHeUxg0y_TA8Ir3qQdSfP9C_o_ZrryVKtxWfQ2tuFVhaKt3qtCDAE"/>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="pt-24 pb-20 md:pl-64 min-h-screen">
+<div class="max-w-[1200px] mx-auto px-6 md:px-12">
+<!-- Hero / Title Section (Editorial Style) -->
+<section class="mb-16">
+<span class="text-primary font-bold tracking-widest text-xs uppercase mb-4 block">Curation for your craft</span>
+<h2 class="font-headline text-5xl md:text-7xl font-extrabold tracking-tighter text-on-background max-w-2xl leading-none">
+                    Discover your <br/><span class="text-primary-container bg-primary px-4 py-1 rounded-xl">next mentor.</span>
+</h2>
+<div class="mt-8 flex flex-wrap gap-3">
+<span class="px-5 py-2 bg-surface-container-high rounded-full text-sm font-medium text-on-surface-variant flex items-center gap-2">
+<span class="material-symbols-outlined text-lg">filter_alt</span> Filters
+                    </span>
+<span class="px-5 py-2 bg-secondary-container text-on-secondary-container rounded-full text-sm font-medium">Design</span>
+<span class="px-5 py-2 bg-surface-container rounded-full text-sm font-medium">Pottery</span>
+<span class="px-5 py-2 bg-surface-container rounded-full text-sm font-medium">Code</span>
+<span class="px-5 py-2 bg-surface-container rounded-full text-sm font-medium">Strategy</span>
+</div>
+</section>
+<!-- Mentor Grid -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-8 md:gap-12">
+<!-- Card 1 -->
+<div class="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-[0_12px_40px_-5px_rgba(28,28,17,0.06)] flex flex-col md:flex-row gap-8 overflow-hidden">
+<div class="relative shrink-0">
+<div class="h-32 w-32 md:h-48 md:w-48 rounded-xl overflow-hidden shadow-lg rotate-[-2deg] group-hover:rotate-0 transition-transform duration-500">
+<img alt="Elena Vance" class="h-full w-full object-cover" data-alt="portrait of a focused female designer in a modern minimalist office with large windows and plants in background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBf6wBKu3UCBUYgMs9io_t0mMJW0yNOy4jatm6_woTrGhsvspaBM5L2fYRJSmx4ntdcp24LEuNVzhX06ScaFV_FD3TuIXdot7ALdMZZsXUTm0nL_JU2L2--nWB2rpNmKA9EvxFD3TAgnJz7EMsnYIGGDzsWeQOCxJ3xTMbGKU5kYMJGHyKzqg14MtwVav1qbT6aMqfj6PP1NkD4SDmyqsMyFr0zL0c_SZTvnPTYFe3bMMuw1g9bggANJRiYOCo85IW7dvTsqYRPPRw"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md">
+<span class="material-symbols-outlined text-yellow-500 text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold text-sm">4.9</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline text-2xl font-extrabold text-on-background">Elena Vance</h3>
+<p class="text-primary text-sm font-semibold">Principal Brand Architect</p>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-6 italic line-clamp-3">
+                            "I help craftspeople refine their visual identity through the lens of modern minimalism and structural integrity."
+                        </p>
+<div class="flex flex-wrap gap-2 mb-8">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Branding</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Typography</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Systems</span>
+</div>
+<div class="mt-auto flex items-center gap-4">
+<button class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white font-bold text-sm hover:translate-y-[-2px] transition-all">
+                                Connect
+                            </button>
+<button class="px-6 py-3 rounded-xl bg-surface-container-high text-on-primary-container font-bold text-sm hover:bg-surface-container-highest transition-colors">
+                                View Profile
+                            </button>
+</div>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-[0_12px_40px_-5px_rgba(28,28,17,0.06)] flex flex-col md:flex-row gap-8 overflow-hidden">
+<div class="relative shrink-0">
+<div class="h-32 w-32 md:h-48 md:w-48 rounded-xl overflow-hidden shadow-lg rotate-[2deg] group-hover:rotate-0 transition-transform duration-500">
+<img alt="Marcus Thorne" class="h-full w-full object-cover" data-alt="portrait of a male tech leader in a neutral toned shirt leaning against a concrete wall with soft lighting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuATbDtzDxX1v2YhoPus3i7G7wtLqJF35cAZfULUo3VqWopLZKrIfDBXEfGuu9HoUNQt80gugUJMfiNIw00W49pRDdGFNWplufOCuaDdmRZfv_4ay2xg_wOa1iHcknJlwdlMvNN5Jx2A7fkMl4clAqAMq8aUgRFqKWhltMkJDGshGjWvflHUe_jwggGWavxxlO6vJUusK0XXxyY1OBmH5aQ5KZBnYMGrjDsV7vH3AObEFytbtHPZJyp3-eddS81T77YPbwAnXJpnyvo"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md">
+<span class="material-symbols-outlined text-yellow-500 text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold text-sm">5.0</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline text-2xl font-extrabold text-on-background">Marcus Thorne</h3>
+<p class="text-primary text-sm font-semibold">Tech Lead @ Atelier Systems</p>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-6 italic line-clamp-3">
+                            "Bridging the gap between creative expression and technical scalability. Let's build something that lasts."
+                        </p>
+<div class="flex flex-wrap gap-2 mb-8">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Backend</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Cloud</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Go</span>
+</div>
+<div class="mt-auto flex items-center gap-4">
+<button class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white font-bold text-sm hover:translate-y-[-2px] transition-all">
+                                Connect
+                            </button>
+<button class="px-6 py-3 rounded-xl bg-surface-container-high text-on-primary-container font-bold text-sm hover:bg-surface-container-highest transition-colors">
+                                View Profile
+                            </button>
+</div>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="group relative bg-surface-container-lowest rounded-xl p-8 transition-all hover:shadow-[0_12px_40px_-5px_rgba(28,28,17,0.06)] flex flex-col md:flex-row gap-8 overflow-hidden">
+<div class="relative shrink-0">
+<div class="h-32 w-32 md:h-48 md:w-48 rounded-xl overflow-hidden shadow-lg rotate-[-1deg] group-hover:rotate-0 transition-transform duration-500">
+<img alt="Sophia Laine" class="h-full w-full object-cover" data-alt="creative professional woman with glasses looking thoughtful, soft artistic daylight from a window" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBmEvtYwolirF8OaM8uAj3qTQStIVYHuDsbWFxK2sIvP5iSvrwgTnulzg99YgPEENl0irAtL9w1lKZFuvVIzP0JlrWJCCuOjOcOw8-YPkP43fG4OaqxZZIjnm6TnjyMf_LRvrhjRsYjmIth-JLvotOcyhDQK859OSNqOOo04j3wyWjXBTpS30w76VXVvgU9sFDfKpz-5TRToiTHPRUUhV8lRvR_KieLxAV6APH4kLexZg4A5dGeHj8LEFV2fuzEEgXDOvblvcHGmqU"/>
+</div>
+<div class="absolute -bottom-2 -right-2 bg-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md">
+<span class="material-symbols-outlined text-yellow-500 text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold text-sm">4.8</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline text-2xl font-extrabold text-on-background">Sophia Laine</h3>
+<p class="text-primary text-sm font-semibold">Senior Content Strategist</p>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-6 italic line-clamp-3">
+                            "Storytelling is a craft. I teach how to weave narratives that resonate with human intuition and emotion."
+                        </p>
+<div class="flex flex-wrap gap-2 mb-8">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Writing</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Strategy</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">PR</span>
+</div>
+<div class="mt-auto flex items-center gap-4">
+<button class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white font-bold text-sm hover:translate-y-[-2px] transition-all">
+                                Connect
+                            </button>
+<button class="px-6 py-3 rounded-xl bg-surface-container-high text-on-primary-container font-bold text-sm hover:bg-surface-container-highest transition-colors">
+                                View Profile
+                            </button>
+</div>
+</div>
+</div>
+<!-- Card 4 (Glassmorphism "Exchange" Variant) -->
+<div class="group relative bg-primary-container/20 backdrop-blur-md rounded-xl p-8 transition-all hover:shadow-[0_12px_40px_-5px_rgba(28,28,17,0.06)] border border-primary/10 flex flex-col md:flex-row gap-8 overflow-hidden">
+<div class="relative shrink-0">
+<div class="h-32 w-32 md:h-48 md:w-48 rounded-xl overflow-hidden shadow-lg group-hover:scale-105 transition-transform duration-500">
+<img alt="Julian Ray" class="h-full w-full object-cover" data-alt="close up of a cheerful man with beard and stylish haircut in a bright sunny outdoor setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCLnLSKHQTEt1Dd4sBAwQ1WUjLIMhGdjPMInFF-ORDgoilF83cpgHyomyTM58OXIspOERieKuEm00TGMn7FkDqfWi6Q9LiQBgQJiQDBKAJMLB3sWD30IBDy45uXCaFnPzDvpsPfaO3l-qgo71QicJvK84yhZiXpXcghdva2_FH4yBdNEXr_-CR_GPxpDOtK9bBeilEgm2siqr4HfESPdG_o6gKXRBSzRXq5NCaf2RKiwO7GDVrqbtr5mWXyV350jNBhTW_bobbET1g"/>
+</div>
+<div class="absolute top-2 left-2 bg-tertiary text-white px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-tighter">
+                            Top Match
+                        </div>
+<div class="absolute -bottom-2 -right-2 bg-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-md">
+<span class="material-symbols-outlined text-yellow-500 text-sm" style="font-variation-settings: 'FILL' 1;">star</span>
+<span class="font-bold text-sm">4.9</span>
+</div>
+</div>
+<div class="flex-1 flex flex-col">
+<div class="flex justify-between items-start mb-2">
+<div>
+<h3 class="font-headline text-2xl font-extrabold text-on-background">Julian Ray</h3>
+<p class="text-primary text-sm font-semibold">Master Artisan Potter</p>
+</div>
+</div>
+<p class="text-on-surface-variant text-sm leading-relaxed mb-6 italic line-clamp-3">
+                            "Exploring the tactile relationship between earth and hand. Specializing in high-fire stoneware and organic forms."
+                        </p>
+<div class="flex flex-wrap gap-2 mb-8">
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Ceramics</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Art</span>
+<span class="px-3 py-1 bg-secondary-container text-on-secondary-container text-xs font-bold rounded-full">Studio</span>
+</div>
+<div class="mt-auto flex items-center gap-4">
+<button class="flex-1 py-3 px-6 rounded-xl bg-gradient-to-br from-primary to-primary-container text-white font-bold text-sm hover:translate-y-[-2px] transition-all">
+                                Connect
+                            </button>
+<button class="px-6 py-3 rounded-xl bg-surface-container-high text-on-primary-container font-bold text-sm hover:bg-surface-container-highest transition-colors">
+                                View Profile
+                            </button>
+</div>
+</div>
+</div>
+</div>
+<!-- More results loading indicator / Pagination -->
+<div class="mt-20 flex flex-col items-center">
+<div class="h-1 w-24 bg-surface-container-highest rounded-full overflow-hidden mb-6">
+<div class="h-full w-1/2 bg-primary"></div>
+</div>
+<p class="text-stone-400 font-medium text-sm">Showing 12 of 148 Mentors</p>
+<button class="mt-6 px-12 py-4 rounded-xl border-2 border-primary/20 text-primary font-bold hover:bg-primary hover:text-white transition-all">
+                    Load More Creators
+                </button>
+</div>
+</div>
+</main>
+<!-- Mobile BottomNavBar (Authority: JSON/Manual Mapping) -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface/80 backdrop-blur-lg flex justify-around items-center px-4 z-50 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+<button class="flex flex-col items-center gap-1 text-stone-500">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-[10px] font-bold">Dash</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-primary">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">diversity_3</span>
+<span class="text-[10px] font-bold">Mentors</span>
+</button>
+<button class="bg-primary text-white p-3 rounded-full -translate-y-6 shadow-lg shadow-primary/30">
+<span class="material-symbols-outlined">add</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-500">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="text-[10px] font-bold">Sessions</span>
+</button>
+<button class="flex flex-col items-center gap-1 text-stone-500">
+<span class="material-symbols-outlined">person</span>
+<span class="text-[10px] font-bold">Profile</span>
+</button>
+</nav>
+</body></html>

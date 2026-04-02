@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Session Details | SkillCache</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;700;800&amp;family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#326943",
+                        "on-primary": "#ffffff",
+                        "surface-container-highest": "#e6e3d0",
+                        "surface": "#fdfae6",
+                        "on-background": "#1c1c11",
+                        "on-secondary": "#ffffff",
+                        "on-secondary-fixed": "#02210f",
+                        "secondary-container": "#c5e9cb",
+                        "surface-bright": "#fdfae6",
+                        "inverse-surface": "#313124",
+                        "primary-fixed": "#b4f1c0",
+                        "on-secondary-fixed-variant": "#2f4d37",
+                        "surface-container-low": "#f7f4e1",
+                        "on-surface-variant": "#414941",
+                        "surface-dim": "#dddbc8",
+                        "outline-variant": "#c0c9be",
+                        "tertiary": "#8d4a58",
+                        "secondary-fixed": "#c8ebcd",
+                        "primary-fixed-dim": "#99d4a5",
+                        "on-error": "#ffffff",
+                        "tertiary-container": "#ffaaba",
+                        "on-secondary-container": "#4a6a52",
+                        "on-primary-fixed": "#00210c",
+                        "background": "#fdfae6",
+                        "outline": "#717970",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-fixed-dim": "#accfb2",
+                        "on-tertiary-fixed-variant": "#713341",
+                        "inverse-on-surface": "#f4f1de",
+                        "on-error-container": "#93000a",
+                        "secondary": "#46654e",
+                        "surface-container": "#f1eedb",
+                        "tertiary-fixed-dim": "#ffb1c0",
+                        "surface-variant": "#e6e3d0",
+                        "primary": "#326943",
+                        "error-container": "#ffdad6",
+                        "primary-container": "#94cfa0",
+                        "on-primary-fixed-variant": "#18512d",
+                        "inverse-primary": "#99d4a5",
+                        "on-surface": "#1c1c11",
+                        "tertiary-fixed": "#ffd9de",
+                        "on-tertiary-fixed": "#3a0717",
+                        "error": "#ba1a1a",
+                        "on-tertiary": "#ffffff",
+                        "on-primary-container": "#215934",
+                        "surface-container-high": "#ebe9d6",
+                        "on-tertiary-container": "#7b3b4a"
+                    },
+                    fontFamily: {
+                        "headline": ["Manrope"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: {"DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        h1, h2, h3 { font-family: 'Manrope', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-surface text-on-surface min-h-screen">
+<!-- SideNavBar (from JSON) -->
+<aside class="h-screen w-64 fixed left-0 top-0 flex flex-col h-full py-8 px-6 bg-[#fdfae6] dark:bg-stone-950 z-50">
+<div class="mb-12">
+<span class="text-2xl font-black text-[#326943] dark:text-[#94CFA0] tracking-tighter">SkillCache</span>
+<p class="text-stone-500 text-xs mt-1 font-label">Digital Atelier</p>
+</div>
+<nav class="flex-1 space-y-2">
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors text-stone-500 dark:text-stone-400 font-medium group" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="font-manrope font-bold text-lg">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors text-stone-500 dark:text-stone-400 font-medium" href="#">
+<span class="material-symbols-outlined">diversity_3</span>
+<span class="font-manrope font-bold text-lg">Find Mentors</span>
+</a>
+<!-- Active State: Sessions -->
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl text-[#326943] dark:text-[#94CFA0] font-bold border-r-4 border-[#326943] bg-[#f7f4e1] dark:bg-stone-900 translate-x-1 duration-200" href="#">
+<span class="material-symbols-outlined">calendar_today</span>
+<span class="font-manrope font-bold text-lg">Sessions</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors text-stone-500 dark:text-stone-400 font-medium" href="#">
+<span class="material-symbols-outlined">folder_open</span>
+<span class="font-manrope font-bold text-lg">Repository</span>
+</a>
+<a class="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[#f1eedb] dark:hover:bg-stone-800 transition-colors text-stone-500 dark:text-stone-400 font-medium" href="#">
+<span class="material-symbols-outlined">person</span>
+<span class="font-manrope font-bold text-lg">Profile</span>
+</a>
+</nav>
+<button class="mt-auto bg-gradient-to-br from-primary to-primary-container text-on-primary py-4 px-6 rounded-xl font-bold text-sm shadow-sm hover:translate-y-[-2px] transition-all">
+            Share a Skill
+        </button>
+</aside>
+<!-- TopNavBar (from JSON) -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-16 z-40 bg-[#fdfae6]/80 dark:bg-stone-950/80 backdrop-blur-xl flex justify-between items-center px-12 transition-all">
+<div class="flex items-center bg-surface-container rounded-full px-4 py-1.5 w-96">
+<span class="material-symbols-outlined text-stone-400 text-xl">search</span>
+<input class="bg-transparent border-none focus:ring-0 text-sm font-label w-full placeholder:text-stone-400" placeholder="Search sessions, resources..." type="text"/>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex items-center gap-4">
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="text-stone-500 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+<div class="h-8 w-[1px] bg-outline-variant/30"></div>
+<button class="text-primary font-semibold text-sm font-inter hover:opacity-80 transition-opacity">
+                New Session
+            </button>
+<img alt="User Avatar" class="w-8 h-8 rounded-full bg-surface-container-highest" data-alt="Portrait of a creative professional with a friendly smile, soft natural lighting in a modern home office setting" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZ4Xr2okWPgzqD3CDuryANlq-izuUh0N5lp0cNdsuty6cvlGdtyoXspF1acZiA2uzeqqBZ3Eq9yecyatlxRKog9-W15MXvkj87N6-TBgno506KBg8j2eJBgQaIkfLAUtCdlknyJanNBovNO889JSAGa2cNJcxWleFQi9I4VjJPj4rdsn1L_Cg-J4R5SD7HnVJdO9HL_44rvyBa3IlkFgLnzXIgPqSIado73-jnkpXbnsABLhAfAfUv-voTHMCr1ZX7fP40bI6t-VM"/>
+</div>
+</header>
+<!-- Main Content -->
+<main class="ml-64 pt-16 min-h-screen">
+<div class="max-w-6xl mx-auto px-12 py-20">
+<!-- Hero Breadcrumb & Header -->
+<div class="mb-12">
+<nav class="flex gap-2 text-stone-500 text-xs font-label uppercase tracking-widest mb-4">
+<span>Sessions</span>
+<span>/</span>
+<span class="text-primary font-bold">Details</span>
+</nav>
+<div class="flex justify-between items-end">
+<div>
+<h1 class="text-5xl font-extrabold tracking-tighter text-on-background mb-4 leading-[1.1]">
+                            Advanced Clay <br/>Glazing Techniques
+                        </h1>
+<div class="flex items-center gap-3">
+<span class="px-4 py-1 bg-secondary-container text-on-secondary-container rounded-full text-xs font-bold font-label">CERAMICS</span>
+<span class="text-stone-500 text-sm font-label">• 60 Minute Mastery</span>
+</div>
+</div>
+<div class="text-right">
+<div class="flex items-center gap-2 text-tertiary mb-1">
+<span class="material-symbols-outlined text-sm" style="font-variation-settings: 'FILL' 1;">fiber_manual_record</span>
+<span class="font-bold text-xs font-label tracking-widest uppercase">Live in 5 minutes</span>
+</div>
+<button class="bg-gradient-to-br from-primary to-primary-container text-on-primary px-10 py-5 rounded-xl font-bold text-lg flex items-center gap-3 shadow-lg hover:shadow-primary/20 transition-all transform hover:-translate-y-1">
+<span class="material-symbols-outlined">video_call</span>
+                            Start Session Call
+                        </button>
+</div>
+</div>
+</div>
+<!-- Bento Layout Container -->
+<div class="grid grid-cols-12 gap-8">
+<!-- Main Details Card -->
+<div class="col-span-8 space-y-8">
+<div class="bg-surface-container-lowest rounded-xl p-10 shadow-sm">
+<div class="grid grid-cols-2 gap-12">
+<div class="space-y-6">
+<h3 class="text-xs font-bold text-stone-400 uppercase tracking-widest">Mentor</h3>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-xl overflow-hidden bg-surface-container">
+<img alt="Mentor Profile" class="w-full h-full object-cover" data-alt="Close up of an artisan potter with clay-stained hands smiling warmly at the camera, authentic craft studio background" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDSRoNKFfmqD-thiKqGaIbeWL4OP5ERWJnTEYbhLsBIz3xOkIA390q6pd43lx7MTLynBLMfsn7pzNKIfvYctyqy7cPx37kZHv7lV8hpHC1TeZIshb3jmAjNzPvA6fUhHR0Jai6xv6-_UFb-lmYyEY6zD1BjNj4qBKV12ZvU9ch6tNUW-K9L2LhxEiEj3eXeoKjaaV2wHVCab31Z4X8e2QlL1h0hVnSERpIqSUP_mLuqVkp9m0g2cHDUjETR5lXeOTCqwPg3x9NLRNk"/>
+</div>
+<div>
+<p class="font-bold text-xl text-on-background">Elena Rostova</p>
+<p class="text-stone-500 text-sm">Master Ceramicist at The Kiln Collective</p>
+</div>
+</div>
+</div>
+<div class="space-y-6">
+<h3 class="text-xs font-bold text-stone-400 uppercase tracking-widest">Schedule</h3>
+<div class="flex items-center gap-4">
+<div class="w-16 h-16 rounded-xl bg-surface-container flex flex-col items-center justify-center text-primary">
+<span class="text-xs font-bold uppercase">Oct</span>
+<span class="text-2xl font-black">24</span>
+</div>
+<div>
+<p class="font-bold text-xl text-on-background">Today, 2:00 PM</p>
+<p class="text-stone-500 text-sm">Central European Time (GMT+2)</p>
+</div>
+</div>
+</div>
+</div>
+<div class="mt-12 pt-12 border-t border-outline-variant/20">
+<h3 class="text-xs font-bold text-stone-400 uppercase tracking-widest mb-6">Learning Agenda</h3>
+<ul class="space-y-4">
+<li class="flex items-start gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container/30 flex items-center justify-center text-primary text-xs font-bold mt-0.5">01</span>
+<p class="text-on-background leading-relaxed">Understanding chemical compositions of high-fire glazes and their reactions.</p>
+</li>
+<li class="flex items-start gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container/30 flex items-center justify-center text-primary text-xs font-bold mt-0.5">02</span>
+<p class="text-on-background leading-relaxed">Demonstration of the "Atmospheric Layering" brush technique.</p>
+</li>
+<li class="flex items-start gap-4">
+<span class="w-6 h-6 rounded-full bg-primary-container/30 flex items-center justify-center text-primary text-xs font-bold mt-0.5">03</span>
+<p class="text-on-background leading-relaxed">Live troubleshooting of common pooling and crazing issues.</p>
+</li>
+</ul>
+</div>
+</div>
+<!-- Resources Section -->
+<div class="bg-surface-container-low rounded-xl p-10">
+<div class="flex justify-between items-center mb-8">
+<h3 class="text-xl font-bold tracking-tight">Shared Resources</h3>
+<button class="text-primary font-bold text-sm flex items-center gap-1 hover:opacity-70 transition-opacity">
+<span class="material-symbols-outlined text-lg">add_circle</span>
+                                Add Note
+                            </button>
+</div>
+<div class="grid grid-cols-2 gap-6">
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-primary/20 transition-all group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-3 bg-secondary-container/20 rounded-lg text-primary">
+<span class="material-symbols-outlined">description</span>
+</div>
+<button class="text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">download</span>
+</button>
+</div>
+<p class="font-bold mb-1">Chemical_Safety_Sheet.pdf</p>
+<p class="text-stone-500 text-xs uppercase font-label">Pre-session Reading • 1.2 MB</p>
+</div>
+<div class="bg-surface-container-lowest p-6 rounded-xl border border-transparent hover:border-primary/20 transition-all group">
+<div class="flex justify-between items-start mb-4">
+<div class="p-3 bg-secondary-container/20 rounded-lg text-primary">
+<span class="material-symbols-outlined">link</span>
+</div>
+<button class="text-stone-400 opacity-0 group-hover:opacity-100 transition-opacity">
+<span class="material-symbols-outlined">open_in_new</span>
+</button>
+</div>
+<p class="font-bold mb-1">Inspiration Moodboard</p>
+<p class="text-stone-500 text-xs uppercase font-label">Pinterest Link • External</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Sidebar Contextual Info -->
+<div class="col-span-4 space-y-8">
+<!-- Session Card Mini Info -->
+<div class="bg-on-background text-white rounded-xl p-8 overflow-hidden relative">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+<h4 class="text-stone-400 text-xs font-bold uppercase tracking-widest mb-4">Connection Details</h4>
+<div class="space-y-6 relative z-10">
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">shield</span>
+<span class="text-sm">End-to-end Encrypted Call</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">high_quality</span>
+<span class="text-sm">Ultra HD 4K Support</span>
+</div>
+<div class="flex items-center gap-3">
+<span class="material-symbols-outlined text-primary-container">emergency_recording</span>
+<span class="text-sm">Cloud Recording (Automated)</span>
+</div>
+</div>
+<div class="mt-8 pt-8 border-t border-white/10">
+<p class="text-xs text-stone-400 mb-2">Invite Collaborator</p>
+<div class="flex gap-2">
+<input class="bg-white/5 border-none rounded-lg text-xs w-full focus:ring-0" readonly="" type="text" value="skillcache.app/j/823-991"/>
+<button class="bg-white/10 p-2 rounded-lg hover:bg-white/20 transition-colors">
+<span class="material-symbols-outlined text-sm">content_copy</span>
+</button>
+</div>
+</div>
+</div>
+<!-- Peer Learners -->
+<div class="bg-surface-container rounded-xl p-8">
+<h4 class="text-stone-400 text-xs font-bold uppercase tracking-widest mb-6">Group Session</h4>
+<div class="space-y-4">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Learner" class="w-8 h-8 rounded-full bg-white" data-alt="Portrait of a young creative man with glasses in a minimalist workspace" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDbQvvQsstLlyKyfBLmJuFtpGLbWSRg6EP86z-w1XdNVsjgrBTxgaQvsHc33s-WfQDCypAzOYYas87Ut0_bKdukEEEMPpGHcjUoqr4qtdswHohu2Qk2FcOusF-0CmlFZ1LZJtDi2v-IUWjyC6Pl36UFHnDhDFWnn9EHw3ij4RZ4scMnyKGf0_f7QLDDCfZYIB5LMmaxJk3piHKw0pYADtrj15gJO-_Rfkyq2349PAmh3KbaRUvzKl0Ds6BX9NLSAVcQrK010NUkZLw"/>
+<span class="text-sm font-bold">Alex Chen</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary" title="Online"></span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<img alt="Learner" class="w-8 h-8 rounded-full bg-white" data-alt="Portrait of a woman with curly hair looking focused in a bright studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuC26CDWAeaGP6UsLGSgt3XiV86XbYgv3MnOGsgC8VAZKPVLydgwWmdC-1uEv2O18SNItmHo3rpk-q6vfuJ9w53VcIwH2u9d1qfwH0kuahNgUjkbIrLuPVrQvLmIO_RYYLY2nQh1sh3C3s-e7d9OsDq5tXu6k9l5mBI_zdWvQNVPklbL7a57Z_fCFO6SHIwnTX6ou8q8PkQQ9D2P4kfEQHklOrFsBmy85sP2W8YXP8u-9glAbtU6ftOiADrrBgIqYf0cHZQQgtlm0yE"/>
+<span class="text-sm font-bold">Maya Patel</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-stone-300" title="Offline"></span>
+</div>
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 flex items-center justify-center text-[10px] font-bold text-primary">YOU</div>
+<span class="text-sm font-bold">Julian V.</span>
+</div>
+<span class="w-2 h-2 rounded-full bg-primary" title="Online"></span>
+</div>
+</div>
+</div>
+<!-- Exchange Card (Special Component) -->
+<div class="bg-primary/5 rounded-xl p-8 border border-primary/10">
+<h4 class="text-primary text-xs font-bold uppercase tracking-widest mb-4">The Exchange</h4>
+<p class="text-sm text-on-surface-variant leading-relaxed mb-6">
+                            In return for Elena's Ceramics expertise, you are sharing <strong>UI Prototyping in Figma</strong> next Tuesday.
+                        </p>
+<div class="relative h-16 flex items-center">
+<div class="w-12 h-12 rounded-full border-2 border-white overflow-hidden z-10">
+<img alt="Elena" class="w-full h-full object-cover" data-alt="Close up portrait of Elena, a ceramicist" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAEm70t0j2tNwSpSAthS1pV3DpW36RLVE1ZcQdyElPoTiCILHwC8q-AbPB-wgoGMxHEfNOFYFiZ-bXsUYvaeK9xvDHy6GJPG6EynWtP5kfGX4fEWJ-Ko3Mf-71EhtDsfhjA3keTqc4UmzuAtwlTsayPMmOdT2iVP2cn3ohj_uLLd5itcB--_sZPiN9v7OhtpDzvz5wx1tv6SrDdeq0ni4Fa9LvMGINEI0M3fEC1IlmE8S2a5BmPo_obHYHAJvt845NhxWInxOlHcFk"/>
+</div>
+<div class="w-12 h-12 rounded-full border-2 border-white overflow-hidden -ml-4 z-20 backdrop-blur-sm bg-white/30 flex items-center justify-center">
+<span class="material-symbols-outlined text-primary text-xl">sync</span>
+</div>
+<div class="w-12 h-12 rounded-full border-2 border-white overflow-hidden -ml-4 z-10 bg-surface-container-highest">
+<img alt="User" class="w-full h-full object-cover" data-alt="A stylish creative professional in a modern studio" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBGZasLjzLIYWLGXzjcOmfD_CQPs9KbLuTBb-uYrY-j2NS6sfGdNUZ1rAg1mOYbB1iwmLbzzZIJ1oCpEUSdQmJ6Oe7I2T5mWsTNT2h_qGYNIG9lxmU3NUUCR7tDgCiR6enn0zKSBnssIT9Jsc0wN5gI0z1weWv-nN4G7tcCZ6FBbi-ZGrxf4BuQ59QsDTOYM23_gzTLFy4UhWxjEl-0a86G2WiHnP8GqEQN_ueIELBLfmOqizTfHZNpYPP_bw5Akybfy6mFe3C95To"/>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
