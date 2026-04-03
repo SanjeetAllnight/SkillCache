@@ -5,7 +5,6 @@ import { Inter, Manrope } from "next/font/google";
 import "@/app/globals.css";
 import { MockUserProvider } from "@/components/providers/mock-user-provider";
 import { AUTH_COOKIE_NAME } from "@/lib/auth";
-import { verifySessionToken } from "@/lib/session";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -32,8 +31,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const sessionToken = cookieStore.get(AUTH_COOKIE_NAME)?.value;
-  const isLoggedIn = await verifySessionToken(sessionToken);
+  const isLoggedIn = Boolean(cookieStore.get(AUTH_COOKIE_NAME)?.value);
 
   return (
     <html lang="en">

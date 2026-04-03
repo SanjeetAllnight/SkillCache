@@ -135,7 +135,7 @@ export default function MentorsPage() {
           {isLoading ? "Loading mentors..." : `Showing ${mentors.length} mentors`}
         </p>
         <Button variant="outline" rounded="xl" className="mt-6 px-12" disabled>
-          Curated by API
+          Curated by Firestore
         </Button>
       </div>
     </div>

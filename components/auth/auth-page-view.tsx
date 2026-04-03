@@ -81,7 +81,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
   }
 
   function handleSocialAuth() {
-    setError("Social sign-in is not connected yet. Use email and password for now.");
+    setError("Email and password auth is live. Add Google or GitHub providers in Firebase Auth to enable social sign-in.");
   }
 
   return (
@@ -240,7 +240,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
               disabled={isSubmitting}
               className="h-14 w-full text-base disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isSubmitting ? "Signing In..." : submitLabel}
+              {isSubmitting ? "Working..." : submitLabel}
               {isSubmitting ? null : <Icon name="arrow_forward" className="text-lg" />}
             </Button>
           </form>

@@ -5,19 +5,12 @@
   "description": "Next.js App Router frontend rebuild of the SkillCache stitch exports.",
   "scripts": {
     "dev": "next dev",
-    "server": "node server/index.js",
     "build": "next build",
     "start": "next start"
   },
   "dependencies": {
-    "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.0",
-    "express": "^5.2.1",
-    "jose": "^6.2.2",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.3.3",
+    "firebase": "^12.4.0",
     "next": "^16.2.2",
     "react": "^19.2.4",
     "react-dom": "^19.2.4"

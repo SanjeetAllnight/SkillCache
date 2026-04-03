@@ -9,18 +9,18 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 import {
   DEFAULT_AUTH_REDIRECT,
+  isProtectedPath,
   resolveAuthRedirect,
 } from "@/lib/auth";
 import {
-  clearStoredAuth,
-  getStoredToken,
-  getStoredUser,
   login as loginRequest,
+  logout as logoutRequest,
   signup as signupRequest,
+  subscribeToAuthState,
   type LoginInput,
   type SignupInput,
 } from "@/lib/api";
@@ -51,25 +51,42 @@ export function MockUserProvider({
   initialIsLoggedIn: boolean;
   children: ReactNode;
 }>) {
+  const pathname = usePathname();
   const router = useRouter();
   const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [user, setUser] = useState(mockUser);
 
   useEffect(() => {
-    const storedToken = getStoredToken();
-    const storedUser = getStoredUser();
+    let isMounted = true;
+    const unsubscribe = subscribeToAuthState((authenticatedUser) => {
+      if (!isMounted) {
+        return;
+      }
 
-    if (storedToken && storedUser) {
-      setUser(toDisplayUser(storedUser));
-      setIsLoggedIn(true);
-    } else {
-      clearStoredAuth();
-      setIsLoggedIn(false);
-    }
+      if (authenticatedUser) {
+        setUser(toDisplayUser(authenticatedUser));
+        setIsLoggedIn(true);
+      } else {
+        setUser(mockUser);
+        setIsLoggedIn(false);
 
-    setIsAuthReady(true);
-  }, []);
+        if (isProtectedPath(pathname)) {
+          const authPath = new URLSearchParams({
+            next: pathname,
+          }).toString();
+          router.replace(`/auth?${authPath}`);
+        }
+      }
+
+      setIsAuthReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, [pathname, router]);
 
   const login = useCallback(async (credentials: LoginInput, redirectTo = DEFAULT_AUTH_REDIRECT) => {
     const auth = await loginRequest(credentials);
@@ -80,20 +97,17 @@ export function MockUserProvider({
   }, [router]);
 
   const signup = useCallback(async (payload: SignupInput, redirectTo = DEFAULT_AUTH_REDIRECT) => {
-    await signupRequest(payload);
-    await login(
-      {
-        email: payload.email,
-        password: payload.password,
-      },
-      redirectTo,
-    );
-  }, [login]);
+    const auth = await signupRequest(payload);
+    setUser(toDisplayUser(auth.user));
+    setIsLoggedIn(true);
+    router.replace(resolveAuthRedirect(redirectTo));
+    router.refresh();
+  }, [router]);
 
   const logout = useCallback(() => {
     setIsLoggedIn(false);
     setUser(mockUser);
-    clearStoredAuth();
+    void logoutRequest();
     router.replace("/auth");
     router.refresh();
   }, [router]);
