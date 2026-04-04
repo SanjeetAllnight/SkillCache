@@ -1,14 +1,9 @@
 import type { MentorCardData } from "@/components/cards/mentor-card";
 import type { SessionCardData } from "@/components/cards/session-card";
-import { mentorsData } from "@/lib/mock-data";
 import type { ApiSession } from "@/lib/firebaseServices";
 import type { BackendUser } from "@/lib/mockUser";
 
-const mentorVisuals = mentorsData.mentors;
-
-function getVisual(index: number) {
-  return mentorVisuals[index % mentorVisuals.length];
-}
+// ─── Date helpers ─────────────────────────────────────────────────────────────
 
 function formatDisplayDate(date: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -25,9 +20,22 @@ function formatDisplayTime(date: string) {
   }).format(new Date(date));
 }
 
+// ─── Session avatar index (for session card visual variety) ───────────────────
+// Session cards still use a palette of cover images (not user avatars).
+import { mentorsData } from "@/lib/mock-data";
+const sessionVisuals = mentorsData.mentors;
+function getSessionVisual(index: number) {
+  return sessionVisuals[index % sessionVisuals.length];
+}
+
+// ─── Mentor card mapping ──────────────────────────────────────────────────────
+
+/**
+ * Maps raw Firestore BackendUser objects to MentorCardData.
+ * NO placeholder images — image is left empty so MentorCard renders initials.
+ */
 export function toMentorCardData(mentors: BackendUser[]): MentorCardData[] {
   return mentors.map((mentor, index) => {
-    const visual = getVisual(index);
     const offeredSkills =
       mentor.skillsOffered && mentor.skillsOffered.length > 0
         ? mentor.skillsOffered
@@ -46,23 +54,20 @@ export function toMentorCardData(mentors: BackendUser[]): MentorCardData[] {
           ? `Sharing ${offeredSkills.join(", ")} while exploring ${wantedSkills.join(", ")} through focused exchange.`
           : `Open for guided mentorship in ${offeredSkills.join(", ")} and collaborative skill exchange.`,
       tags: offeredSkills,
-      rating: (4.8 + ((index % 3) * 0.1)).toFixed(1),
-      image: visual.image,
-      location: visual.location,
-      narrative: visual.narrative,
-      coverImage: visual.coverImage,
+      rating: "5.0",       // placeholder until we track actual ratings
+      image: "",           // intentionally empty — MentorCard renders initials
+      location: "Remote",
       profileHref: `/profile?mentor=${mentor._id}`,
       connectHref: `/profile?mentor=${mentor._id}`,
       featured: index === 0,
       badge: index === 0 ? "Available" : undefined,
-      tilt: visual.tilt,
     };
   });
 }
 
 export function toDashboardSessionCards(sessions: ApiSession[]): SessionCardData[] {
   return sessions.slice(0, 2).map((session, index) => {
-    const visual = getVisual(index);
+    const visual = getSessionVisual(index);
 
     return {
       variant: "dashboard",
@@ -82,7 +87,7 @@ export function toDashboardSessionCards(sessions: ApiSession[]): SessionCardData
 }
 
 export function toFeaturedSessionCard(session: ApiSession): SessionCardData {
-  const visual = getVisual(0);
+  const visual = getSessionVisual(0);
 
   return {
     variant: "featured",
@@ -99,7 +104,7 @@ export function toFeaturedSessionCard(session: ApiSession): SessionCardData {
 
 export function toUpcomingSessionCards(sessions: ApiSession[]): SessionCardData[] {
   return sessions.map((session, index) => {
-    const visual = getVisual(index);
+    const visual = getSessionVisual(index);
 
     return {
       variant: "upcoming",

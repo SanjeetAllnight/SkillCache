@@ -1,4 +1,3 @@
-import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
@@ -12,6 +11,7 @@ export type MentorCardData = {
   quote: string;
   tags: string[];
   rating: string;
+  /** URL to the mentor's photo. Leave empty ("") to render an initials avatar. */
   image: string;
   location?: string;
   narrative?: string;
@@ -27,13 +27,34 @@ type MentorCardProps = {
   mentor: MentorCardData;
 };
 
+// ─── Initials avatar ──────────────────────────────────────────────────────────
+
+const INITIALS_PALETTE = [
+  "bg-primary-container text-on-primary-container",
+  "bg-secondary-container text-on-secondary-container",
+  "bg-tertiary-container text-on-tertiary-container",
+];
+
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0]?.toUpperCase() ?? "")
+    .join("");
+}
+
+function hashIndex(str: string, mod: number): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  return Math.abs(h) % mod;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export function MentorCard({ mentor }: MentorCardProps) {
-  const tiltClass =
-    mentor.tilt === "left"
-      ? "rotate-[-2deg] group-hover:rotate-0"
-      : mentor.tilt === "right"
-        ? "rotate-[2deg] group-hover:rotate-0"
-        : "group-hover:scale-105";
+  const hasImage = Boolean(mentor.image);
+  const initials  = getInitials(mentor.name);
+  const palette   = INITIALS_PALETTE[hashIndex(mentor.name, INITIALS_PALETTE.length)];
 
   return (
     <article
@@ -44,45 +65,63 @@ export function MentorCard({ mentor }: MentorCardProps) {
           : "bg-surface-container-lowest editorial-shadow hover:-translate-y-1",
       )}
     >
+      {/* ── Avatar column ────────────────────────────────────────────── */}
       <div className="relative shrink-0">
         <Link
           href={mentor.profileHref ?? "/profile"}
-          className={cn(
-            "relative block h-32 w-32 overflow-hidden rounded-2xl shadow-xl transition-transform duration-500 md:h-48 md:w-48",
-            tiltClass,
-          )}
+          className="relative block h-32 w-32 overflow-hidden rounded-2xl shadow-xl transition-transform duration-500 group-hover:scale-105 md:h-48 md:w-48"
         >
-          <Image
-            src={mentor.image}
-            alt={mentor.name}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 128px, 192px"
-          />
+          {hasImage ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={mentor.image}
+              alt={mentor.name}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div
+              className={cn(
+                "flex h-full w-full items-center justify-center font-headline text-4xl font-black md:text-5xl",
+                palette,
+              )}
+            >
+              {initials}
+            </div>
+          )}
         </Link>
-        {mentor.badge ? (
+
+        {mentor.badge && (
           <div className="absolute left-2 top-2 rounded-full bg-tertiary px-3 py-1 text-[10px] font-bold uppercase tracking-tight text-white">
             {mentor.badge}
           </div>
-        ) : null}
+        )}
+
+        {/* Rating chip */}
         <div className="absolute -bottom-2 -right-2 flex items-center gap-1 rounded-full bg-white px-3 py-1.5 shadow-md">
           <Icon name="star" filled className="text-sm text-yellow-500" />
           <span className="text-sm font-bold">{mentor.rating}</span>
         </div>
       </div>
 
+      {/* ── Info column ──────────────────────────────────────────────── */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="space-y-2">
+        <div className="space-y-1">
           <Link href={mentor.profileHref ?? "/profile"} className="group/title inline-block">
             <h3 className="font-headline text-2xl font-extrabold text-on-background transition-colors group-hover/title:text-primary">
               {mentor.name}
             </h3>
           </Link>
           <p className="text-sm font-semibold text-primary">{mentor.role}</p>
+          {mentor.location && (
+            <p className="flex items-center gap-1 text-xs text-stone-400">
+              <Icon name="location_on" className="text-sm" />
+              {mentor.location}
+            </p>
+          )}
         </div>
 
         <p className="mt-4 line-clamp-3 text-sm italic leading-relaxed text-on-surface-variant">
-          "{mentor.quote}"
+          &ldquo;{mentor.quote}&rdquo;
         </p>
 
         <div className="mt-6 flex flex-wrap gap-2">

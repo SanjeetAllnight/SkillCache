@@ -1,7 +1,6 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -9,78 +8,141 @@ import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tag } from "@/components/ui/tag";
 import { useAuth } from "@/components/providers/auth-provider";
-import { getMentors } from "@/lib/firebaseServices";
-import { profileData } from "@/lib/mock-data";
-import { toMentorCardData } from "@/lib/view-models";
+import { getUserById, updateUserProfile } from "@/lib/firebaseServices";
+import type { BackendUser } from "@/lib/mockUser";
 
-const badgeToneClasses: Record<string, string> = {
-  primary: "from-primary/10 text-primary",
-  tertiary: "from-tertiary/10 text-tertiary",
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+const PALETTE = [
+  "bg-primary-container text-on-primary-container",
+  "bg-secondary-container text-on-secondary-container",
+  "bg-tertiary-container text-on-tertiary-container",
+];
+
+function initials(name: string) {
+  return name.split(" ").slice(0, 2).map((n) => n[0]?.toUpperCase() ?? "").join("");
+}
+function paletteFor(name: string) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = ((h << 5) - h + name.charCodeAt(i)) | 0;
+  return PALETTE[Math.abs(h) % PALETTE.length];
+}
+function parseComma(s: string) {
+  return s.split(",").map((x) => x.trim()).filter(Boolean);
+}
+
+// ─── Badge definitions (earned by having skills / sessions) ───────────────────
+
+const EARNED_BADGES = [
+  { icon: "trophy",        title: "Top Mentor",   subtitle: "Q1 2025",       tone: "primary"   },
+  { icon: "auto_awesome",  title: "Skill Sage",   subtitle: "Shared skills", tone: "tertiary"  },
+  { icon: "handshake",     title: "Connector",    subtitle: "Active member", tone: "secondary" },
+  { icon: "lock",          title: "???",          subtitle: "Locked",        tone: "locked"    },
+];
+
+const badgeClasses: Record<string, string> = {
+  primary:   "from-primary/10 text-primary",
+  tertiary:  "from-tertiary/10 text-tertiary",
   secondary: "from-secondary/10 text-secondary",
-  locked: "border-2 border-dashed border-outline-variant text-outline-variant",
+  locked:    "border-2 border-dashed border-outline-variant text-outline-variant",
 };
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
   const searchParams = useSearchParams();
-  const mentorId = searchParams.get("mentor");
-  const { user } = useAuth();
-  const [selectedMentor, setSelectedMentor] = useState<ReturnType<typeof toMentorCardData>[number] | null>(null);
-  const [isLoadingMentor, setIsLoadingMentor] = useState(false);
+  const mentorId     = searchParams.get("mentor");
+  const { user }     = useAuth();
 
+  // The profile being displayed — either another user or the logged-in user
+  const [profile, setProfile]     = useState<BackendUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Own-profile edit state
+  const [editing, setEditing]           = useState(false);
+  const [editName, setEditName]         = useState("");
+  const [editBio, setEditBio]           = useState("");
+  const [editOffered, setEditOffered]   = useState("");
+  const [editWanted, setEditWanted]     = useState("");
+  const [saving, setSaving]             = useState(false);
+  const [saveError, setSaveError]       = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess]   = useState(false);
+
+  // Whether we're viewing our own profile (no ?mentor param, or param === own uid)
+  const isOwnProfile = !mentorId || mentorId === user?._id;
+  const displayUid   = mentorId ?? user?._id ?? null;
+
+  // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    let isMounted = true;
+    if (!displayUid) return;
+    let mounted = true;
 
-    async function loadMentorProfile() {
+    async function load() {
+      setIsLoading(true);
+      setLoadError(null);
       try {
-        setIsLoadingMentor(true);
-        const mentors = await getMentors();
-
-        if (!isMounted) {
-          return;
+        const data = await getUserById(displayUid!);
+        if (!mounted) return;
+        setProfile(data);
+        if (isOwnProfile && data) {
+          setEditName(data.name ?? "");
+          setEditBio(data.bio ?? "");
+          setEditOffered((data.skillsOffered ?? []).join(", "));
+          setEditWanted((data.skillsWanted ?? []).join(", "));
         }
-
-        const mentorCards = toMentorCardData(mentors);
-        setSelectedMentor(
-          mentorCards.find((mentor) => mentor.id === mentorId) ?? null,
-        );
-      } catch {
-        if (isMounted) {
-          setSelectedMentor(null);
-        }
+      } catch (err) {
+        if (!mounted) return;
+        setLoadError((err as Error).message);
       } finally {
-        if (isMounted) {
-          setIsLoadingMentor(false);
-        }
+        if (mounted) setIsLoading(false);
       }
     }
 
-    if (mentorId) {
-      void loadMentorProfile();
-    } else {
-      setSelectedMentor(null);
+    void load();
+    return () => { mounted = false; };
+  }, [displayUid, isOwnProfile]);
+
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const handleSave = useCallback(async () => {
+    if (!user?._id) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaveSuccess(false);
+    try {
+      await updateUserProfile(user._id, {
+        skillsOffered: parseComma(editOffered),
+        skillsWanted:  parseComma(editWanted),
+        bio:           editBio.trim(),
+      });
+      // Refresh local state
+      setProfile((prev) =>
+        prev
+          ? {
+              ...prev,
+              bio:          editBio.trim(),
+              skillsOffered: parseComma(editOffered),
+              skillsWanted:  parseComma(editWanted),
+            }
+          : prev,
+      );
+      setSaveSuccess(true);
+      setEditing(false);
+    } catch (err) {
+      setSaveError((err as Error).message);
+    } finally {
+      setSaving(false);
     }
+  }, [user, editBio, editOffered, editWanted]);
 
-    return () => {
-      isMounted = false;
-    };
-  }, [mentorId]);
-
-  const activeProfile = useMemo(
-    () => ({
-      name: selectedMentor?.name ?? user?.name ?? "SkillCache Member",
-      avatar: selectedMentor?.image ?? "/default-avatar.png",
-      cover: selectedMentor?.coverImage ?? "/default-cover.png",
-      location: selectedMentor?.location ?? "Remote",
-      role: selectedMentor?.role ?? "Creative Member",
-      narrative: selectedMentor?.narrative ?? profileData.narrative,
-    }),
-    [selectedMentor, user],
-  );
-
-  if (mentorId && isLoadingMentor) {
+  // ── Loading skeleton ──────────────────────────────────────────────────────
+  if (isLoading) {
     return (
       <div className="page-shell page-stack">
-        <Skeleton className="h-80 w-full" />
+        <div className="space-y-4">
+          <Skeleton className="h-52 w-full md:h-72" />
+          <Skeleton className="h-36 w-full max-w-xs" />
+        </div>
         <div className="grid gap-10 xl:grid-cols-12">
           <div className="space-y-8 xl:col-span-4">
             <Skeleton className="h-48 w-full" />
@@ -95,195 +157,283 @@ export default function ProfilePage() {
     );
   }
 
+  // ── Error / not found ─────────────────────────────────────────────────────
+  if (loadError || !profile) {
+    return (
+      <div className="page-shell">
+        <div className="rounded-2xl bg-error/10 px-6 py-10 text-center">
+          <p className="text-lg font-semibold text-error">
+            {loadError ?? "Profile not found."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const avatarInitials = initials(profile.name);
+  const avatarPalette  = paletteFor(profile.name);
+  const offeredSkills  = profile.skillsOffered ?? [];
+  const wantedSkills   = profile.skillsWanted  ?? [];
+  const bio            = profile.bio ?? "";
+
   return (
     <div className="page-shell page-stack">
+
+      {/* ── Cover + avatar header ──────────────────────────────────────── */}
       <section className="section-stack">
         <div className="relative">
-          <div className="relative h-64 w-full overflow-hidden rounded-2xl bg-surface-container md:h-80">
-            <Image
-              src={activeProfile.cover}
-              alt="Profile cover"
-              fill
-              className="object-cover opacity-80"
-              sizes="(max-width: 1200px) 100vw, 1200px"
-            />
-          </div>
-          <div className="relative -mt-10 flex flex-col gap-6 px-5 sm:px-6 md:-mt-16 md:flex-row md:items-end md:px-8 lg:px-10">
-            <div className="relative h-32 w-32 overflow-hidden rounded-2xl border-4 border-surface bg-surface-container-lowest shadow-xl md:h-44 md:w-44">
-              <Image
-                src={activeProfile.avatar}
-                alt={activeProfile.name}
-                fill
-                className="object-cover"
-                sizes="176px"
-              />
+          {/* Cover gradient */}
+          <div className="relative h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary/30 via-secondary/20 to-tertiary/30 md:h-72">
+            <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent" />
+            {/* Decorative monogram */}
+            <div className="pointer-events-none absolute -right-10 -top-10 font-headline text-[160px] font-black leading-none tracking-tighter text-white/5 select-none">
+              {avatarInitials}
             </div>
-            <div className="space-y-2 pb-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="font-headline text-3xl font-black tracking-tighter text-on-surface md:text-5xl">
-                  {activeProfile.name}
-                </h1>
-                <Icon name="verified" filled className="text-primary" />
+          </div>
+
+          {/* Avatar + name */}
+          <div className="relative -mt-10 flex flex-col gap-4 px-5 sm:px-6 md:-mt-14 md:flex-row md:items-end md:px-8 lg:px-10">
+            <div className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-surface font-headline text-4xl font-black shadow-xl md:h-40 md:w-40 md:text-5xl ${avatarPalette}`}>
+              {avatarInitials}
+            </div>
+
+            <div className="flex flex-1 flex-col justify-end gap-3 pb-2 md:flex-row md:items-end md:justify-between">
+              <div className="space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h1 className="font-headline text-3xl font-black tracking-tighter text-on-surface md:text-5xl">
+                    {profile.name}
+                  </h1>
+                  <Icon name="verified" filled className="text-primary" />
+                </div>
+                <p className="text-sm font-medium text-stone-500">
+                  {offeredSkills.length > 0
+                    ? offeredSkills[0] + " Mentor · Remote"
+                    : "SkillCache Member · Remote"}
+                </p>
               </div>
-              <p className="flex flex-wrap items-center gap-2 font-medium text-stone-500">
-                <Icon name="location_on" className="text-sm" />
-                {activeProfile.location} &middot; {activeProfile.role}
-              </p>
+
+              {/* Edit / save controls — own profile only */}
+              {isOwnProfile && !editing && (
+                <button
+                  id="btn-edit-profile"
+                  type="button"
+                  onClick={() => { setEditing(true); setSaveSuccess(false); }}
+                  className="flex items-center gap-2 self-start rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface transition hover:bg-surface-container-high md:self-auto"
+                >
+                  <Icon name="edit" className="text-sm" />
+                  Edit Profile
+                </button>
+              )}
             </div>
           </div>
         </div>
       </section>
 
+      {/* ── Success banner ─────────────────────────────────────────────── */}
+      {saveSuccess && (
+        <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+          <Icon name="check_circle" filled className="text-base" />
+          Profile saved successfully.
+        </div>
+      )}
+
+      {/* ── Main 2-col layout ──────────────────────────────────────────── */}
       <div className="grid gap-10 xl:grid-cols-12">
-        <aside className="space-y-12 xl:col-span-4">
+
+        {/* ── Left sidebar ──────────────────────────────────────────────── */}
+        <aside className="space-y-10 xl:col-span-4">
+
+          {/* Bio */}
           <section className="section-stack">
-            <h2 className="text-xs font-bold uppercase tracking-editorial text-stone-400">
-              The Narrative
+            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+              About
             </h2>
-            <p className="text-lg leading-relaxed text-on-surface-variant">
-              {activeProfile.narrative}
-            </p>
-            <div className="flex items-center gap-4 py-2">
-              <div className="flex -space-x-3">
-                {profileData.connections.map((connection) => (
-                  <div
-                    key={connection}
-                    className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-surface bg-surface-container"
-                  >
-                    <Image
-                      src={connection}
-                      alt="Connection"
-                      fill
-                      className="object-cover"
-                      sizes="40px"
-                    />
-                  </div>
-                ))}
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-surface bg-primary-container text-[10px] font-bold text-on-primary-container">
-                  +42
-                </div>
+            {editing ? (
+              <textarea
+                id="edit-bio"
+                value={editBio}
+                onChange={(e) => setEditBio(e.target.value)}
+                maxLength={400}
+                rows={5}
+                placeholder="Tell the community about yourself…"
+                className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+            ) : (
+              <p className="text-base leading-relaxed text-on-surface-variant">
+                {bio || (
+                  <span className="italic text-stone-500">
+                    {isOwnProfile ? "No bio yet — click Edit Profile to add one." : "No bio provided."}
+                  </span>
+                )}
+              </p>
+            )}
+          </section>
+
+          {/* Skills offered */}
+          <section className="app-card-soft space-y-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+              Teaching
+            </h2>
+            {editing ? (
+              <div className="space-y-1">
+                <input
+                  id="edit-skills-offered"
+                  type="text"
+                  value={editOffered}
+                  onChange={(e) => setEditOffered(e.target.value)}
+                  placeholder="React, Figma, Python…"
+                  className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <p className="text-[11px] text-stone-400">Separate with commas</p>
               </div>
-              <span className="text-sm font-medium text-stone-500">
-                {selectedMentor ? `Connect with ${selectedMentor.name}` : "Mentored 44+ artisans"}
-              </span>
-            </div>
+            ) : offeredSkills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {offeredSkills.map((s) => (
+                  <Tag key={s} className="px-3 py-1 text-xs normal-case">{s}</Tag>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm italic text-stone-400">
+                {isOwnProfile ? "Add skills to teach others." : "No skills listed."}
+              </p>
+            )}
           </section>
 
-          <section className="app-card-soft">
-            <h2 className="mb-6 text-xs font-bold uppercase tracking-editorial text-stone-400">
-              Vitality
+          {/* Skills wanted */}
+          <section className="app-card-soft space-y-4">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+              Learning
             </h2>
-            <div className="grid grid-cols-2 gap-6">
-              {profileData.vitality.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <span className="text-3xl font-black text-primary">{item.value}</span>
-                  <p className="text-xs font-bold uppercase text-stone-500">{item.label}</p>
-                </div>
-              ))}
-            </div>
+            {editing ? (
+              <div className="space-y-1">
+                <input
+                  id="edit-skills-wanted"
+                  type="text"
+                  value={editWanted}
+                  onChange={(e) => setEditWanted(e.target.value)}
+                  placeholder="Piano, Spanish, Photography…"
+                  className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+                <p className="text-[11px] text-stone-400">Separate with commas</p>
+              </div>
+            ) : wantedSkills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {wantedSkills.map((s) => (
+                  <Tag key={s} className="px-3 py-1 text-xs normal-case bg-secondary-container/30">{s}</Tag>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm italic text-stone-400">
+                {isOwnProfile ? "Add skills you want to learn." : "No learning goals listed."}
+              </p>
+            )}
           </section>
 
-          <section className="section-stack">
-            <h2 className="text-xs font-bold uppercase tracking-editorial text-stone-400">
-              Connect
-            </h2>
-            <div className="flex gap-3">
-              {["language", "alternate_email", "share"].map((icon) => (
-                <button
-                  key={icon}
-                  type="button"
-                  className="flex h-12 w-12 items-center justify-center rounded-full bg-surface-container text-primary transition-all hover:bg-primary hover:text-white"
-                >
-                  <Icon name={icon} />
-                </button>
-              ))}
-            </div>
-          </section>
-        </aside>
+          {/* Email — own profile only */}
+          {isOwnProfile && (
+            <section className="section-stack">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">Contact</h2>
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant">
+                <Icon name="alternate_email" className="text-primary" />
+                {profile.email}
+              </div>
+            </section>
+          )}
 
-        <div className="min-w-0 space-y-12 xl:col-span-8">
-          <section className="section-stack">
-            <div className="flex items-end justify-between gap-4">
-              <h2 className="text-xs font-bold uppercase tracking-editorial text-stone-400">
-                The Arsenal
-              </h2>
+          {/* Save / cancel — own profile editing */}
+          {isOwnProfile && editing && (
+            <div className="flex flex-col gap-3">
+              {saveError && (
+                <p className="rounded-xl bg-error/10 px-4 py-2 text-sm text-error">{saveError}</p>
+              )}
               <button
+                id="btn-save-profile"
                 type="button"
-                className="flex items-center gap-1 text-sm font-bold text-primary"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:opacity-60"
               >
-                View All
-                <Icon name="arrow_forward" className="text-sm" />
+                {saving ? (
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
+                  </svg>
+                ) : (
+                  <Icon name="save" className="text-base" />
+                )}
+                {saving ? "Saving…" : "Save Changes"}
+              </button>
+              <button
+                id="btn-cancel-edit"
+                type="button"
+                onClick={() => { setEditing(false); setSaveError(null); }}
+                disabled={saving}
+                className="text-center text-sm text-stone-400 underline underline-offset-2 transition hover:text-stone-600"
+              >
+                Cancel
               </button>
             </div>
+          )}
+        </aside>
 
-            <div className="grid gap-6 md:grid-cols-2">
-              {profileData.skills.map((skill) => (
-                <article
-                  key={skill.title}
-                  className="app-card transition-all hover:-translate-y-0.5"
-                >
-                  <div className="mb-4 flex items-start justify-between gap-4">
-                    <div
-                      className={`flex h-12 w-12 items-center justify-center rounded-2xl ${
-                        skill.tone === "primary"
-                          ? "bg-primary-container text-on-primary-container"
-                          : "bg-secondary-container text-on-secondary-container"
-                      }`}
-                    >
-                      <Icon name={skill.icon} />
-                    </div>
-                    <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-bold text-stone-500">
-                      {skill.level}
-                    </span>
-                  </div>
-                  <h3 className="mb-2 font-headline text-xl font-bold">{skill.title}</h3>
-                  <p className="mb-4 text-sm text-stone-500">{skill.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {skill.tags.map((tag) => (
-                      <Tag
-                        key={tag}
-                        className="bg-secondary-fixed px-3 py-1 text-[10px] uppercase tracking-wider text-on-secondary-fixed-variant"
-                      >
-                        {tag}
-                      </Tag>
-                    ))}
-                  </div>
-                </article>
-              ))}
+        {/* ── Right main column ─────────────────────────────────────────── */}
+        <div className="min-w-0 space-y-10 xl:col-span-8">
+
+          {/* Skill detail cards */}
+          <section className="section-stack">
+            <div className="flex items-center justify-between gap-4">
+              <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+                The Arsenal
+              </h2>
             </div>
+
+            {offeredSkills.length > 0 ? (
+              <div className="grid gap-6 md:grid-cols-2">
+                {offeredSkills.map((skill, i) => (
+                  <article key={skill} className="app-card transition-all hover:-translate-y-0.5">
+                    <div className="mb-4 flex items-start justify-between gap-4">
+                      <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${i % 2 === 0 ? "bg-primary-container text-on-primary-container" : "bg-secondary-container text-on-secondary-container"}`}>
+                        <Icon name="auto_awesome" />
+                      </div>
+                      <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-bold text-stone-500">
+                        Mentor
+                      </span>
+                    </div>
+                    <h3 className="mb-2 font-headline text-xl font-bold">{skill}</h3>
+                    <p className="text-sm text-stone-500">
+                      Available for mentorship sessions in {skill}.
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-outline-variant/30 p-8 text-center">
+                <Icon name="add_circle" className="mb-2 text-4xl text-stone-300" />
+                <p className="text-sm text-stone-400">
+                  {isOwnProfile
+                    ? "Add skills you can teach to appear here."
+                    : "No skills listed yet."}
+                </p>
+              </div>
+            )}
           </section>
 
+          {/* Accolades / badges */}
           <section className="section-stack">
-            <h2 className="text-xs font-bold uppercase tracking-editorial text-stone-400">
+            <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
               Accolades
             </h2>
             <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 md:grid-cols-4">
-              {profileData.badges.map((badge) => (
+              {EARNED_BADGES.map((badge) => (
                 <article
                   key={badge.title}
-                  className={`flex flex-col items-center gap-3 text-center ${
-                    badge.tone === "locked" ? "opacity-40 grayscale" : ""
-                  }`}
+                  className={`flex flex-col items-center gap-3 text-center ${badge.tone === "locked" ? "opacity-40 grayscale" : ""}`}
                 >
-                  <div
-                    className={`relative flex h-24 w-24 items-center justify-center rounded-full bg-surface-container-highest ${
-                      badge.tone === "locked"
-                        ? badgeToneClasses.locked
-                        : `bg-gradient-to-tr ${badgeToneClasses[badge.tone]}`
-                    }`}
-                  >
-                    <Icon
-                      name={badge.icon}
-                      filled={badge.icon !== "lock"}
-                      className="text-4xl"
-                    />
+                  <div className={`relative flex h-24 w-24 items-center justify-center rounded-full bg-surface-container-highest ${badge.tone === "locked" ? badgeClasses.locked : `bg-gradient-to-tr ${badgeClasses[badge.tone]}`}`}>
+                    <Icon name={badge.icon} filled={badge.icon !== "lock"} className="text-4xl" />
                   </div>
                   <div className="space-y-0.5">
-                    <h3
-                      className={`text-sm font-bold ${
-                        badge.tone === "locked" ? "text-stone-400" : ""
-                      }`}
-                    >
+                    <h3 className={`text-sm font-bold ${badge.tone === "locked" ? "text-stone-400" : ""}`}>
                       {badge.title}
                     </h3>
                     <p className="text-[10px] font-bold uppercase tracking-tight text-stone-400">
@@ -295,48 +445,34 @@ export default function ProfilePage() {
             </div>
           </section>
 
+          {/* CTA section */}
           <section className="relative overflow-hidden rounded-2xl bg-surface-container p-6 md:p-12">
             <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 opacity-10">
-              <Icon
-                name="brush"
-                className="absolute -right-20 -top-20 text-[200px] text-primary"
-              />
+              <Icon name="groups" className="absolute -right-10 -top-10 text-[180px] text-primary" />
             </div>
-            <div className="relative z-10 max-w-lg space-y-6">
-              <Tag className="px-4 py-1.5 text-xs">Active Exchange</Tag>
+            <div className="relative z-10 max-w-lg space-y-5">
+              <Tag className="px-4 py-1.5 text-xs">
+                {isOwnProfile ? "Your Exchange" : "Connect"}
+              </Tag>
               <h2 className="font-headline text-3xl font-black tracking-tighter md:text-4xl">
-                {selectedMentor
-                  ? `Work with ${selectedMentor.name}`
-                  : "Creative Direction & Design Philosophy"}
+                {isOwnProfile
+                  ? `${offeredSkills.length > 0 ? `Share ${offeredSkills[0]}` : "Share your skills"}`
+                  : `Work with ${profile.name}`}
               </h2>
               <p className="font-medium text-on-surface-variant">
-                {selectedMentor ? (
-                  <>
-                    Explore {selectedMentor.name}&apos;s practice and start a new mentorship exchange.
-                  </>
-                ) : (
-                  <>
-                    Currently mentoring{" "}
-                    <span className="font-bold text-primary">atelier members</span> through
-                    focused live sessions and shared resources.
-                  </>
-                )}
+                {isOwnProfile
+                  ? "Find learners who want what you know, or discover mentors for what you want to learn."
+                  : `Explore ${profile.name}'s skills and book a mentorship session.`}
               </p>
               <div className="flex flex-wrap items-center gap-4">
-                <Button
-                  href={selectedMentor ? "/sessions" : "/call"}
-                  variant="solid"
-                  rounded="xl"
-                >
-                  {selectedMentor ? "Book Session" : "Join Studio"}
+                <Button href={isOwnProfile ? "/mentors" : "/sessions"} variant="solid" rounded="xl">
+                  {isOwnProfile ? "Find Mentors" : "Book Session"}
                   <Icon name="chevron_right" className="text-sm" />
                 </Button>
-                <div className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/50 bg-white/20 backdrop-blur-sm">
-                  <Icon name="videocam" className="text-primary" />
-                </div>
               </div>
             </div>
           </section>
+
         </div>
       </div>
     </div>

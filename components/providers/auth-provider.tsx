@@ -18,9 +18,7 @@ import {
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
-import { setDoc, doc, getDoc } from "firebase/firestore";
-
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import {
   DEFAULT_AUTH_REDIRECT,
   isProtectedPath,
@@ -28,6 +26,10 @@ import {
   setBrowserAuthCookie,
 } from "@/lib/auth";
 import type { BackendUser } from "@/lib/mockUser";
+import {
+  createUserProfile,
+  getUserProfile,
+} from "@/lib/firebaseServices";
 
 type AuthContextValue = {
   user: BackendUser | null;
@@ -63,16 +65,14 @@ export function AuthProvider({
   const [user, setUser] = useState<BackendUser | null>(null);
 
   const syncUserFromFirestore = useCallback(async (uid: string, email: string | null) => {
-    const docRef = doc(db, "users", uid);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      const data = snap.data();
+    const profile = await getUserProfile(uid);
+    if (profile) {
       setUser({
-        _id: docRef.id,
-        name: data.name || "SkillCache Member",
-        email: data.email || email || "",
-        skillsOffered: data.skillsOffered || [],
-        skillsWanted: data.skillsWanted || [],
+        _id: uid,
+        name: profile.name || "SkillCache Member",
+        email: profile.email || email || "",
+        skillsOffered: profile.skillsOffered || [],
+        skillsWanted: profile.skillsWanted || [],
       });
     } else {
       setUser({
@@ -91,6 +91,14 @@ export function AuthProvider({
         await syncUserFromFirestore(firebaseUser.uid, firebaseUser.email);
         setIsLoggedIn(true);
         setBrowserAuthCookie(true);
+
+        // Gate: if no Firestore doc or profileComplete === false → redirect
+        if (pathname && !pathname.startsWith("/complete-profile")) {
+          const profile = await getUserProfile(firebaseUser.uid);
+          if (!profile || profile.profileComplete === false) {
+            router.replace("/complete-profile");
+          }
+        }
       } else {
         setUser(null);
         setIsLoggedIn(false);
@@ -116,38 +124,30 @@ export function AuthProvider({
 
   const signup = useCallback(async (payload: { name: string; email: string; password: string; skillsOffered?: string[]; skillsWanted?: string[] }, redirectTo = DEFAULT_AUTH_REDIRECT) => {
     const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
-    // Create user object in Firestore
-    await setDoc(doc(db, "users", cred.user.uid), {
-      name: payload.name,
-      email: payload.email,
-      skillsOffered: payload.skillsOffered || [],
-      skillsWanted: payload.skillsWanted || [],
-      rating: 0,
-      sessionsCompleted: 0
-    });
-    router.replace(resolveAuthRedirect(redirectTo));
+    // Write initial profile to Firestore
+    await createUserProfile(cred.user.uid, { name: payload.name, email: payload.email });
+    // Redirect new users to complete their profile
+    router.replace("/complete-profile");
     router.refresh();
   }, [router]);
 
   const googleLogin = useCallback(async (redirectTo = DEFAULT_AUTH_REDIRECT) => {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(auth, provider);
-    
-    // Check if user exists in Firestore
-    const docRef = doc(db, "users", cred.user.uid);
-    const snap = await getDoc(docRef);
-    if (!snap.exists()) {
-      await setDoc(docRef, {
-        name: cred.user.displayName || "SkillCache Member",
-        email: cred.user.email || "",
-        skillsOffered: [],
-        skillsWanted: [],
-        rating: 0,
-        sessionsCompleted: 0
-      });
+
+    // Write initial profile only if the Firestore doc doesn't exist yet
+    await createUserProfile(cred.user.uid, {
+      name: cred.user.displayName || "SkillCache Member",
+      email: cred.user.email || "",
+    });
+
+    // Check completion and redirect accordingly
+    const profile = await getUserProfile(cred.user.uid);
+    if (!profile || profile.profileComplete === false) {
+      router.replace("/complete-profile");
+    } else {
+      router.replace(resolveAuthRedirect(redirectTo));
     }
-    
-    router.replace(resolveAuthRedirect(redirectTo));
     router.refresh();
   }, [router]);
 

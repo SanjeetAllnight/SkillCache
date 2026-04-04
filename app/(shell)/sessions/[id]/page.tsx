@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
@@ -10,7 +10,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tag } from "@/components/ui/tag";
 import { getSessionById, type ApiSession } from "@/lib/firebaseServices";
 import { formatSessionDateParts } from "@/lib/view-models";
-import { mockUser } from "@/lib/mockUser";
 
 function getStatusLabel(status: ApiSession["status"]) {
   if (status === "live") {
@@ -171,13 +170,9 @@ export default function SessionDetailsPage() {
                   Mentor
                 </h2>
                 <div className="flex items-center gap-4">
-                  <Image
-                    src={mockUser.avatar}
-                    alt={session.mentor?.name ?? "Mentor"}
-                    width={64}
-                    height={64}
-                    className="h-16 w-16 rounded-2xl object-cover"
-                  />
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-container font-headline text-2xl font-bold text-on-primary-container">
+                    {(session.mentor?.name ?? "M")[0].toUpperCase()}
+                  </div>
                   <div>
                     <p className="text-xl font-bold text-on-background">
                       {session.mentor?.name ?? "Unknown Mentor"}
@@ -309,13 +304,9 @@ export default function SessionDetailsPage() {
               {[session.mentor, session.learner].filter(Boolean).map((participant) => (
                 <div key={participant._id} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <Image
-                      src={mockUser.avatar}
-                      alt={participant.name}
-                      width={32}
-                      height={32}
-                      className="h-8 w-8 rounded-full object-cover"
-                    />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container font-bold text-xs text-on-primary-container">
+                      {participant.name[0].toUpperCase()}
+                    </div>
                     <span className="text-sm font-bold">{participant.name}</span>
                   </div>
                   <span className="h-2 w-2 rounded-full bg-primary" />
