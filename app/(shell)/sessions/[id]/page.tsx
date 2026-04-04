@@ -146,13 +146,17 @@ export default function SessionDetailsPage() {
               </span>
             </div>
             <Button
-              href={session.status === "completed" ? "/sessions" : "/call"}
+              href={
+                session.status === "completed"
+                  ? "/sessions"
+                  : `/call/${session._id}`
+              }
               rounded="xl"
               size="lg"
               className="gap-3"
             >
               <Icon name={session.status === "completed" ? "history" : "video_call"} />
-              {session.status === "completed" ? "Back to Sessions" : "Join Session Call"}
+              {session.status === "completed" ? "Back to Sessions" : "Start Call"}
             </Button>
           </div>
         </div>

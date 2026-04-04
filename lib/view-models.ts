@@ -92,7 +92,7 @@ export function toFeaturedSessionCard(session: ApiSession): SessionCardData {
     status: session.status === "live" ? "Live" : "Starting Soon",
     category: session.mentor?.skillsOffered?.[0] ?? "Mentorship",
     image: visual.coverImage ?? visual.image,
-    joinHref: "/call",
+    joinHref: `/call/${session._id}`,
     detailHref: `/sessions/${session._id}`,
   };
 }
