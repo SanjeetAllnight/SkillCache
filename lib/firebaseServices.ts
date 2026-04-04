@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  onSnapshot,
   query,
   where,
   serverTimestamp,
@@ -10,6 +11,7 @@ import {
   updateDoc,
   addDoc,
   type FieldValue,
+  type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { BackendUser } from "./mockUser";
@@ -28,6 +30,9 @@ export type FirestoreUser = {
   profileComplete?: boolean;
 };
 
+/** Real-time call lifecycle state stored on the session document. */
+export type CallStatus = "idle" | "started" | "joined" | "connected";
+
 export type FirestoreSession = {
   title: string;
   mentorId: string;
@@ -35,6 +40,8 @@ export type FirestoreSession = {
   skill: string;
   date: string;
   status: "live" | "upcoming" | "completed";
+  /** Real-time call state — written by participants during a call. */
+  callStatus?: CallStatus;
 };
 
 export type ApiSession = {
@@ -44,6 +51,8 @@ export type ApiSession = {
   learner: BackendUser;
   date: string;
   status: "live" | "upcoming" | "completed";
+  /** Real-time call state — present once a call has been initiated. */
+  callStatus?: CallStatus;
 };
 
 export type FirestoreResource = {
@@ -350,4 +359,43 @@ export async function getSessionById(sessionId: string): Promise<ApiSession> {
   const session = allSessions.find(s => s._id === sessionId);
   if (!session) throw new Error("Session not found");
   return session;
+}
+
+// ─── Call status helpers ──────────────────────────────────────────────────────
+
+/**
+ * Write the call lifecycle status onto the session document.
+ * Called by both participants:
+ *   mentor  → "started"   (clicked Start Call)
+ *   learner → "joined"    (clicked Join Call)
+ *   either  → "connected" (WebRTC data-channel open)
+ *   either  → "idle"      (call ended / reset)
+ */
+export async function updateSessionCallStatus(
+  sessionId: string,
+  callStatus: CallStatus
+): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    callStatus,
+    updatedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Subscribes to real-time updates of `callStatus` on a session document.
+ * Returns an unsubscribe function — call it on cleanup.
+ *
+ * @param sessionId  Firestore session document ID.
+ * @param onChange   Callback fired whenever `callStatus` changes.
+ */
+export function listenToSessionCallStatus(
+  sessionId: string,
+  onChange: (callStatus: CallStatus | null) => void
+): Unsubscribe {
+  const ref = doc(db, "sessions", sessionId);
+  return onSnapshot(ref, (snap) => {
+    if (!snap.exists()) { onChange(null); return; }
+    const data = snap.data() as FirestoreSession;
+    onChange(data.callStatus ?? null);
+  });
 }

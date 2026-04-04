@@ -6,7 +6,13 @@ import { useParams, useRouter } from "next/navigation";
 import { Icon } from "@/components/ui/icon";
 import { useWebRTC, type ConnectionPhase } from "@/hooks/useWebRTC";
 import { useAuth } from "@/components/providers/auth-provider";
-import { getSessionById, type ApiSession } from "@/lib/firebaseServices";
+import {
+  getSessionById,
+  listenToSessionCallStatus,
+  updateSessionCallStatus,
+  type ApiSession,
+  type CallStatus,
+} from "@/lib/firebaseServices";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,10 +56,12 @@ export default function CallPage() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   // ── UI state ───────────────────────────────────────────────────────────────
-  const [isMuted,        setIsMuted]        = useState(false);
-  const [isCameraOff,    setIsCameraOff]    = useState(false);
-  const [elapsed,        setElapsed]        = useState(0);
-  const [showJoinToast,  setShowJoinToast]  = useState(false);
+  const [isMuted,          setIsMuted]          = useState(false);
+  const [isCameraOff,      setIsCameraOff]      = useState(false);
+  const [elapsed,          setElapsed]          = useState(0);
+  const [showJoinToast,    setShowJoinToast]    = useState(false);
+  /** Live callStatus synced from Firestore — drives learner gating. */
+  const [sharedCallStatus, setSharedCallStatus] = useState<CallStatus | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Load session + enforce access ─────────────────────────────────────────
@@ -108,6 +116,17 @@ export default function CallPage() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [connectionPhase]);
 
+  // ── Real-time shared callStatus listener ───────────────────────────────
+  // Subscribes to sessions/{sessionId}.callStatus via onSnapshot.
+  // Learner uses this to know when the mentor has started (→ show Join button).
+  useEffect(() => {
+    if (!sessionId || !session) return; // wait for session to load first
+    const unsub = listenToSessionCallStatus(sessionId, (status) => {
+      setSharedCallStatus(status);
+    });
+    return () => unsub();
+  }, [sessionId, session]);
+
   // ── Show "other user joined" toast once when first connected ──────────────
   const prevConnectedRef = useRef(false);
   useEffect(() => {
@@ -121,14 +140,27 @@ export default function CallPage() {
   }, [isConnected]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleStartCall = useCallback(async () => { await startCall(); }, [startCall]);
-  const handleJoinCall  = useCallback(async () => { await joinCall(); },  [joinCall]);
+  const handleStartCall = useCallback(async () => {
+    // 1. Write "started" to Firestore — learner will see this and unlock Join
+    await updateSessionCallStatus(sessionId, "started").catch(() => {/* best-effort */});
+    // 2. Begin WebRTC initiation
+    await startCall();
+  }, [sessionId, startCall]);
+
+  const handleJoinCall = useCallback(async () => {
+    // 1. Write "joined" to Firestore so both sides know learner is connecting
+    await updateSessionCallStatus(sessionId, "joined").catch(() => {/* best-effort */});
+    // 2. Begin WebRTC answer
+    await joinCall();
+  }, [sessionId, joinCall]);
 
   const handleEndCall = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
+    // Reset shared call state to idle so the room can be reused
+    await updateSessionCallStatus(sessionId, "idle").catch(() => {/* best-effort */});
     await endCall();
     setTimeout(() => router.push("/sessions"), 1500);
-  }, [endCall, router]);
+  }, [sessionId, endCall, router]);
 
   const toggleMute = useCallback(() => {
     if (!localStream) return;
@@ -301,13 +333,17 @@ export default function CallPage() {
             name={session.mentor?.name ?? "Mentor"}
             role="Mentor"
             isYou={isMentor}
-            online={isConnected || isMentor}
+            online={
+              isMentor || isConnected || sharedCallStatus === "started" || sharedCallStatus === "joined"
+            }
           />
           <ParticipantChip
             name={session.learner?.name ?? "Learner"}
             role="Learner"
             isYou={!isMentor}
-            online={isConnected || !isMentor}
+            online={
+              !isMentor || isConnected || sharedCallStatus === "joined"
+            }
           />
         </div>
       )}
@@ -399,7 +435,9 @@ export default function CallPage() {
 
         <div className="hidden h-10 w-px bg-white/10 md:block" />
 
-        {/* ── Action button: changes by phase + role ── */}
+        {/* ── Action button: changes by phase + role + sharedCallStatus ── */}
+
+        {/* Mentor: always show Start Call when idle */}
         {connectionPhase === "idle" && isMentor && (
           <ControlButton
             id="btn-start-call"
@@ -410,14 +448,28 @@ export default function CallPage() {
           />
         )}
 
+        {/* Learner: show a gated Join Call button */}
         {connectionPhase === "idle" && !isMentor && (
-          <ControlButton
-            id="btn-join-call"
-            icon="call_received"
-            label="Join Call"
-            highlight="blue"
-            onClick={handleJoinCall}
-          />
+          <div className="flex flex-col items-center gap-1">
+            {sharedCallStatus === "started" || sharedCallStatus === "joined" ? (
+              // Mentor has started — learner can join
+              <ControlButton
+                id="btn-join-call"
+                icon="call_received"
+                label="Join Call"
+                highlight="blue"
+                onClick={handleJoinCall}
+              />
+            ) : (
+              // Mentor hasn't started yet — show locked state
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 md:h-14 md:w-14">
+                  <Icon name="call_received" className="text-xl text-stone-600 md:text-2xl" />
+                </div>
+                <span className="text-[10px] uppercase tracking-tight text-stone-600">Waiting…</span>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Spinner shown while waiting or joining */}
