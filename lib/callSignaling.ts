@@ -65,6 +65,8 @@ export interface CallDocument {
   offer: RTCSessionDescriptionInit | null;
   answer: RTCSessionDescriptionInit | null;
   participants: string[];
+  /** UID of the user who created the offer — only they should receive the answer. */
+  initiatorUid: string;
   status: CallStatus;
   createdAt: ReturnType<typeof serverTimestamp>;
   updatedAt: ReturnType<typeof serverTimestamp>;
@@ -125,6 +127,7 @@ export async function createCall(
     offer,
     answer: null,
     participants: [callerUid],
+    initiatorUid: callerUid,   // ← stored so listenForSignals can route answer correctly
     status: "ringing",
     createdAt: serverTimestamp() as ReturnType<typeof serverTimestamp>,
     updatedAt: serverTimestamp() as ReturnType<typeof serverTimestamp>,
@@ -228,23 +231,42 @@ export function listenForSignals(
 ): Unsubscribe {
   const { onOffer, onAnswer, onCandidate, onStatusChange } = options;
 
+  // Dedup flags — prevent re-delivering offer/answer on every snapshot re-fire
+  let offerDelivered  = false;
+  let answerDelivered = false;
+  let lastStatus: CallStatus | null = null;
+
   // ── 1. Watch the call document (offer / answer / status) ──────────────────
   const unsubDoc = onSnapshot(callDocRef(callId), (snap) => {
     if (!snap.exists()) return;
 
     const data = snap.data() as DocumentData;
 
-    // Only deliver the offer if we didn't write it
-    if (onOffer && data.offer && !data.participants?.includes(myUid)) {
+    // ── Offer → only deliver to the NON-initiator, only once ──────────────
+    if (
+      onOffer &&
+      data.offer &&
+      !offerDelivered &&
+      data.initiatorUid !== myUid   // I did NOT write this offer
+    ) {
+      offerDelivered = true;
       onOffer(data.offer as RTCSessionDescriptionInit);
     }
 
-    // Only deliver the answer to the original caller (who wrote the offer)
-    if (onAnswer && data.answer) {
+    // ── Answer → only deliver to the INITIATOR who wrote the offer, only once
+    if (
+      onAnswer &&
+      data.answer &&
+      !answerDelivered &&
+      data.initiatorUid === myUid   // I AM the initiator waiting for an answer
+    ) {
+      answerDelivered = true;
       onAnswer(data.answer as RTCSessionDescriptionInit);
     }
 
-    if (onStatusChange && data.status) {
+    // ── Status change ──────────────────────────────────────────────────────
+    if (onStatusChange && data.status && data.status !== lastStatus) {
+      lastStatus = data.status as CallStatus;
       onStatusChange(data.status as CallStatus);
     }
   });

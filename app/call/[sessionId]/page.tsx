@@ -4,13 +4,11 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { Icon } from "@/components/ui/icon";
-import { useWebRTC } from "@/hooks/useWebRTC";
+import { useWebRTC, type ConnectionPhase } from "@/hooks/useWebRTC";
 import { useAuth } from "@/components/providers/auth-provider";
 import { getSessionById, type ApiSession } from "@/lib/firebaseServices";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type CallPhase = "idle" | "connecting" | "connected" | "ended";
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDuration(seconds: number): string {
   const m = Math.floor(seconds / 60).toString().padStart(2, "0");
@@ -25,18 +23,22 @@ export default function CallPage() {
   const router = useRouter();
   const { user, isAuthReady } = useAuth();
 
-  // ── Session + access control state ────────────────────────────────────────
-  const [session, setSession]     = useState<ApiSession | null>(null);
+  // ── Session + access control ───────────────────────────────────────────────
+  const [session, setSession]           = useState<ApiSession | null>(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [sessionLoading, setSessionLoading] = useState(true);
 
-  // ── WebRTC hook — scoped to this session ID ────────────────────────────────
+  // ── Determine role (mentor = initiator) ───────────────────────────────────
+  const isMentor = session?.mentor?._id === user?._id;
+
+  // ── WebRTC hook ────────────────────────────────────────────────────────────
   const myUid = user?._id ?? "";
   const {
     localStream,
     remoteStream,
     isConnected,
+    connectionPhase,
     error: rtcError,
     startCall,
     joinCall,
@@ -48,10 +50,10 @@ export default function CallPage() {
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
 
   // ── UI state ───────────────────────────────────────────────────────────────
-  const [phase, setPhase]             = useState<CallPhase>("idle");
-  const [isMuted, setIsMuted]         = useState(false);
-  const [isCameraOff, setIsCameraOff] = useState(false);
-  const [elapsed, setElapsed]         = useState(0);
+  const [isMuted,        setIsMuted]        = useState(false);
+  const [isCameraOff,    setIsCameraOff]    = useState(false);
+  const [elapsed,        setElapsed]        = useState(0);
+  const [showJoinToast,  setShowJoinToast]  = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── Load session + enforce access ─────────────────────────────────────────
@@ -63,21 +65,15 @@ export default function CallPage() {
     }
 
     let mounted = true;
-
     async function load() {
       try {
         setSessionLoading(true);
         const data = await getSessionById(sessionId);
         if (!mounted) return;
 
-        // ── Access gate: only mentor or learner may enter ──────────────────
         const isParticipant =
           data.mentor?._id === user!._id || data.learner?._id === user!._id;
-
-        if (!isParticipant) {
-          setAccessDenied(true);
-          return;
-        }
+        if (!isParticipant) { setAccessDenied(true); return; }
 
         setSession(data);
       } catch (err) {
@@ -101,34 +97,35 @@ export default function CallPage() {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = remoteStream;
   }, [remoteStream]);
 
-  // ── Sync phase with connection ─────────────────────────────────────────────
+  // ── Timer ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (isConnected) {
-      setPhase("connected");
+    if (connectionPhase === "connected") {
       timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      setElapsed(0);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [connectionPhase]);
+
+  // ── Show "other user joined" toast once when first connected ──────────────
+  const prevConnectedRef = useRef(false);
+  useEffect(() => {
+    if (isConnected && !prevConnectedRef.current) {
+      prevConnectedRef.current = true;
+      setShowJoinToast(true);
+    }
+    if (!isConnected) {
+      prevConnectedRef.current = false;
+    }
   }, [isConnected]);
 
-  // ── Determine caller vs callee role ───────────────────────────────────────
-  // Mentor is always the initiator (caller); learner joins.
-  const isMentor = session?.mentor?._id === user?._id;
-
-  // ── Handlers ─────────────────────────────────────────────────────────────
-
-  const handleStartCall = useCallback(async () => {
-    setPhase("connecting");
-    await startCall();
-  }, [startCall]);
-
-  const handleJoinCall = useCallback(async () => {
-    setPhase("connecting");
-    await joinCall();
-  }, [joinCall]);
+  // ── Handlers ──────────────────────────────────────────────────────────────
+  const handleStartCall = useCallback(async () => { await startCall(); }, [startCall]);
+  const handleJoinCall  = useCallback(async () => { await joinCall(); },  [joinCall]);
 
   const handleEndCall = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    setPhase("ended");
     await endCall();
     setTimeout(() => router.push("/sessions"), 1500);
   }, [endCall, router]);
@@ -145,15 +142,19 @@ export default function CallPage() {
     setIsCameraOff((c) => !c);
   }, [localStream, isCameraOff]);
 
-  // ─── Status config ─────────────────────────────────────────────────────────
-
-  const statusConfig: Record<CallPhase, { label: string; color: string; dot: string }> = {
-    idle:       { label: "Ready",       color: "text-stone-400",   dot: "bg-stone-500" },
-    connecting: { label: "Connecting",  color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
-    connected:  { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
-    ended:      { label: "Call Ended",  color: "text-red-400",     dot: "bg-red-500" },
+  // ── Status pill config ────────────────────────────────────────────────────
+  type PillConfig = { label: string; color: string; dot: string };
+  const pillConfig: Record<ConnectionPhase, PillConfig> = {
+    idle:      { label: "Ready",              color: "text-stone-400",   dot: "bg-stone-500" },
+    waiting:   { label: "Waiting…",           color: "text-sky-400",     dot: "bg-sky-400 animate-pulse" },
+    joining:   { label: "Connecting…",        color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
+    connected: { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
+    ended:     { label: "Call Ended",         color: "text-red-400",     dot: "bg-red-500" },
   };
-  const status = statusConfig[phase];
+  const pill = pillConfig[connectionPhase];
+
+  // Controls disabled until a real stream is flowing and truly connected
+  const controlsEnabled = connectionPhase === "connected";
 
   // ─── Guard renders ─────────────────────────────────────────────────────────
 
@@ -161,10 +162,7 @@ export default function CallPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-stone-950">
         <div className="flex flex-col items-center gap-4 text-white">
-          <svg className="h-8 w-8 animate-spin text-primary" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-          </svg>
+          <Spinner className="h-8 w-8 text-primary" />
           <p className="text-sm text-stone-400">Loading session…</p>
         </div>
       </div>
@@ -226,19 +224,35 @@ export default function CallPage() {
         className="absolute inset-0 h-full w-full object-cover"
       />
 
-      {/* Placeholder when no remote stream yet */}
+      {/* Remote stream placeholder */}
       {!remoteStream && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-gradient-to-br from-stone-900 via-stone-950 to-black">
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-br from-stone-900 via-stone-950 to-black">
           <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10">
-            <Icon name="person" className="text-5xl text-stone-500" />
+            {connectionPhase === "waiting" || connectionPhase === "joining" ? (
+              <Spinner className="h-9 w-9 text-sky-400" />
+            ) : (
+              <Icon name="person" className="text-5xl text-stone-500" />
+            )}
           </div>
-          <p className="text-sm font-medium text-stone-500">
-            {phase === "idle"
-              ? isMentor
-                ? "Press Start Call to begin"
-                : "Press Join Call to connect"
-              : "Waiting for the other participant…"}
-          </p>
+          <div className="flex flex-col items-center gap-1 text-center">
+            <p className="text-sm font-semibold text-white">
+              {connectionPhase === "idle" && (
+                isMentor ? "Press Start Call to begin" : "Press Join Call to connect"
+              )}
+              {connectionPhase === "waiting" && (
+                isMentor
+                  ? "Waiting for other user to join…"
+                  : "Waiting for mentor to start the call…"
+              )}
+              {connectionPhase === "joining" && "Connecting…"}
+              {connectionPhase === "ended" && "Call Ended"}
+            </p>
+            {(connectionPhase === "waiting" || connectionPhase === "joining") && (
+              <p className="text-xs text-stone-500">
+                This may take a moment
+              </p>
+            )}
+          </div>
         </div>
       )}
 
@@ -256,7 +270,9 @@ export default function CallPage() {
               {session?.title ?? "Session Call"}
             </h1>
             <p className="text-[11px] font-medium text-stone-400">
-              {isMentor ? "You are the mentor" : "You are the learner"}
+              <span className={isMentor ? "text-emerald-400" : "text-sky-400"}>
+                {isMentor ? "Mentor" : "Learner"}
+              </span>
               {" · "}
               {session?.mentor?.name && session?.learner?.name
                 ? `${session.mentor.name} & ${session.learner.name}`
@@ -266,16 +282,20 @@ export default function CallPage() {
         </div>
 
         {/* Status pill */}
-        <div className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-stone-900/70 px-3 py-1.5 backdrop-blur-md">
-          <span className={`h-2 w-2 rounded-full ${status.dot}`} />
-          <span className={`text-xs font-semibold tabular-nums ${status.color}`}>
-            {status.label}
+        <div
+          className="flex shrink-0 items-center gap-2 rounded-full border border-white/10 bg-stone-900/70 px-3 py-1.5 backdrop-blur-md"
+          aria-live="polite"
+          aria-label={`Connection status: ${pill.label}`}
+        >
+          <span className={`h-2 w-2 rounded-full ${pill.dot}`} />
+          <span className={`text-xs font-semibold tabular-nums ${pill.color}`}>
+            {pill.label}
           </span>
         </div>
       </header>
 
       {/* Participant chips */}
-      {session && phase !== "ended" && (
+      {session && connectionPhase !== "ended" && (
         <div className="absolute left-5 top-20 z-20 flex flex-col gap-1.5 sm:left-6 md:left-10 md:top-24">
           <ParticipantChip
             name={session.mentor?.name ?? "Mentor"}
@@ -317,44 +337,102 @@ export default function CallPage() {
         )}
       </div>
 
-      {/* Error banner */}
+      {/* RTC Error banner */}
       {rtcError && (
-        <div className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-300 backdrop-blur-md">
+        <div
+          role="alert"
+          className="absolute left-1/2 top-20 z-30 -translate-x-1/2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-medium text-red-300 backdrop-blur-md"
+        >
           {rtcError}
         </div>
+      )}
+
+      {/* ── Connection status overlay (waiting / joining) ── */}
+      {(connectionPhase === "waiting" || connectionPhase === "joining") && remoteStream === null && (
+        <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 mt-16">
+          <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-stone-900/80 px-6 py-4 backdrop-blur-xl shadow-2xl">
+            <Spinner className="h-5 w-5 text-sky-400" />
+            <span className="text-xs font-semibold text-sky-300 uppercase tracking-widest">
+              {connectionPhase === "waiting" ? "Waiting" : "Connecting"}
+            </span>
+            <p className="text-[11px] text-stone-400 text-center max-w-[180px]">
+              {connectionPhase === "waiting" && isMentor
+                ? "Waiting for other user to join…"
+                : connectionPhase === "waiting" && !isMentor
+                ? "Waiting for mentor to start…"
+                : "Connected — establishing stream…"}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── "Other user joined" toast ── */}
+      {showJoinToast && (
+        <JoinedToast
+          name={isMentor ? session?.learner?.name : session?.mentor?.name}
+          onDismiss={() => setShowJoinToast(false)}
+        />
       )}
 
       {/* Control bar */}
       <nav className="absolute bottom-5 left-1/2 z-30 flex w-[calc(100%-2.5rem)] max-w-3xl -translate-x-1/2 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-stone-900/80 px-4 py-3 shadow-2xl backdrop-blur-2xl sm:w-auto sm:px-6 md:bottom-8 md:gap-4 md:px-8 md:py-4">
 
-        {/* Mute */}
-        <ControlButton id="btn-mute" icon={isMuted ? "mic_off" : "mic"} label={isMuted ? "Unmute" : "Mute"} active={isMuted} onClick={toggleMute} disabled={!localStream} />
+        {/* Mute — only active once connected */}
+        <ControlButton
+          id="btn-mute"
+          icon={isMuted ? "mic_off" : "mic"}
+          label={isMuted ? "Unmute" : "Mute"}
+          active={isMuted}
+          onClick={toggleMute}
+          disabled={!controlsEnabled || !localStream}
+        />
 
-        {/* Camera */}
-        <ControlButton id="btn-camera" icon={isCameraOff ? "videocam_off" : "videocam"} label={isCameraOff ? "Cam On" : "Cam Off"} active={isCameraOff} onClick={toggleCamera} disabled={!localStream} />
+        {/* Camera — only active once connected */}
+        <ControlButton
+          id="btn-camera"
+          icon={isCameraOff ? "videocam_off" : "videocam"}
+          label={isCameraOff ? "Cam On" : "Cam Off"}
+          active={isCameraOff}
+          onClick={toggleCamera}
+          disabled={!controlsEnabled || !localStream}
+        />
 
         <div className="hidden h-10 w-px bg-white/10 md:block" />
 
-        {/* Start Call — mentor only, idle only */}
-        {phase === "idle" && isMentor && (
-          <ControlButton id="btn-start-call" icon="call" label="Start Call" highlight="green" onClick={handleStartCall} />
+        {/* ── Action button: changes by phase + role ── */}
+        {connectionPhase === "idle" && isMentor && (
+          <ControlButton
+            id="btn-start-call"
+            icon="call"
+            label="Start Call"
+            highlight="green"
+            onClick={handleStartCall}
+          />
         )}
 
-        {/* Join Call — learner only, idle only */}
-        {phase === "idle" && !isMentor && (
-          <ControlButton id="btn-join-call" icon="call_received" label="Join Call" highlight="blue" onClick={handleJoinCall} />
+        {connectionPhase === "idle" && !isMentor && (
+          <ControlButton
+            id="btn-join-call"
+            icon="call_received"
+            label="Join Call"
+            highlight="blue"
+            onClick={handleJoinCall}
+          />
         )}
 
-        {/* Connecting spinner */}
-        {phase === "connecting" && (
+        {/* Spinner shown while waiting or joining */}
+        {(connectionPhase === "waiting" || connectionPhase === "joining") && (
           <div className="flex flex-col items-center gap-1">
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/20 md:h-14 md:w-14">
-              <svg className="h-5 w-5 animate-spin text-amber-400" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-              </svg>
+            <div className={`flex h-11 w-11 items-center justify-center rounded-full md:h-14 md:w-14 ${
+              connectionPhase === "waiting" ? "bg-sky-500/20" : "bg-amber-500/20"
+            }`}>
+              <Spinner className={`h-5 w-5 ${connectionPhase === "waiting" ? "text-sky-400" : "text-amber-400"}`} />
             </div>
-            <span className="text-[10px] uppercase tracking-tight text-amber-400">Connecting</span>
+            <span className={`text-[10px] uppercase tracking-tight ${
+              connectionPhase === "waiting" ? "text-sky-400" : "text-amber-400"
+            }`}>
+              {connectionPhase === "waiting" ? "Waiting" : "Joining"}
+            </span>
           </div>
         )}
 
@@ -365,7 +443,7 @@ export default function CallPage() {
           id="btn-end-call"
           type="button"
           onClick={handleEndCall}
-          disabled={phase === "idle" || phase === "ended"}
+          disabled={connectionPhase === "idle" || connectionPhase === "ended"}
           className="group flex flex-col items-center gap-1 disabled:pointer-events-none disabled:opacity-30"
         >
           <div className="flex h-11 w-14 items-center justify-center rounded-full bg-red-600 px-4 transition-all group-hover:bg-red-700 md:h-14 md:w-16 md:px-6">
@@ -381,7 +459,7 @@ export default function CallPage() {
       </div>
 
       {/* Ended overlay */}
-      {phase === "ended" && (
+      {connectionPhase === "ended" && (
         <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/80 backdrop-blur-sm">
           <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600/20 ring-1 ring-red-500/40">
             <Icon name="call_end" filled className="text-3xl text-red-400" />
@@ -394,7 +472,35 @@ export default function CallPage() {
   );
 }
 
-// ─── ParticipantChip ─────────────────────────────────────────────────────────
+// ─── JoinedToast ──────────────────────────────────────────────────────────────
+/**
+ * Briefly shown when the remote peer first connects.
+ * Auto-dismisses after 3 s, then calls onDismiss to clear parent state.
+ */
+function JoinedToast({ name, onDismiss }: { name?: string; onDismiss: () => void }) {
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setVisible(false);
+      onDismiss();
+    }, 3000);
+    return () => clearTimeout(t);
+  }, [onDismiss]);
+  if (!visible) return null;
+  return (
+    <div
+      aria-live="polite"
+      className="absolute left-1/2 top-24 z-30 -translate-x-1/2 animate-in fade-in slide-in-from-top-2 duration-300"
+    >
+      <div className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-semibold text-emerald-300 backdrop-blur-md shadow-lg">
+        <span className="h-2 w-2 rounded-full bg-emerald-400" />
+        {name ? `${name} joined the call` : "Other user joined"}
+      </div>
+    </div>
+  );
+}
+
+// ─── ParticipantChip ──────────────────────────────────────────────────────────
 
 function ParticipantChip({
   name,
@@ -431,9 +537,24 @@ interface ControlButtonProps {
   highlight?: "green" | "blue";
 }
 
-function ControlButton({ id, icon, label, onClick, active = false, disabled = false, highlight }: ControlButtonProps) {
-  const bgMap = { green: "bg-emerald-600 hover:bg-emerald-700", blue: "bg-blue-600 hover:bg-blue-700" };
-  const bg = highlight ? bgMap[highlight] : active ? "bg-white/25 hover:bg-white/30" : "bg-white/10 hover:bg-white/20";
+function ControlButton({
+  id,
+  icon,
+  label,
+  onClick,
+  active = false,
+  disabled = false,
+  highlight,
+}: ControlButtonProps) {
+  const bgMap = {
+    green: "bg-emerald-600 hover:bg-emerald-700",
+    blue:  "bg-blue-600 hover:bg-blue-700",
+  };
+  const bg = highlight
+    ? bgMap[highlight]
+    : active
+    ? "bg-white/25 hover:bg-white/30"
+    : "bg-white/10 hover:bg-white/20";
 
   return (
     <button
@@ -448,5 +569,16 @@ function ControlButton({ id, icon, label, onClick, active = false, disabled = fa
       </div>
       <span className="text-[10px] uppercase tracking-tight text-stone-400">{label}</span>
     </button>
+  );
+}
+
+// ─── Spinner ──────────────────────────────────────────────────────────────────
+
+function Spinner({ className }: { className?: string }) {
+  return (
+    <svg className={`animate-spin ${className ?? ""}`} fill="none" viewBox="0 0 24 24" aria-hidden="true">
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+    </svg>
   );
 }
