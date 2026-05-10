@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -62,13 +61,9 @@ export function Sidebar() {
 
         {sidebarConfig.showProfileFooter && isLoggedIn ? (
           <div className="flex items-center gap-3 px-2">
-            <Image
-              src={user?.avatar ?? "/default-avatar.png"}
-              alt={user?.name ?? "User avatar"}
-              width={40}
-              height={40}
-              className="h-10 w-10 rounded-full border-2 border-primary-container object-cover"
-            />
+            <div className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-primary-container bg-primary-container font-headline text-sm font-bold text-on-primary-container">
+              {user?.name ? user.name[0].toUpperCase() : "?"}
+            </div>
             <div>
               <p className="text-sm font-bold">{user?.name}</p>
               <p className="text-xs font-medium text-stone-500">Creative Member</p>

@@ -262,6 +262,8 @@ export async function createSession(
  * different fields with a single query) and merges + deduplicates results.
  */
 export async function getSessionsForUser(uid: string): Promise<ApiSession[]> {
+  if (!uid) return [];
+
   const [mentorSnap, learnerSnap] = await Promise.all([
     getDocs(query(sessionsCollection, where("mentorId", "==", uid))),
     getDocs(query(sessionsCollection, where("learnerId", "==", uid))),
@@ -274,29 +276,38 @@ export async function getSessionsForUser(uid: string): Promise<ApiSession[]> {
     for (const d of snap.docs) {
       if (!seen.has(d.id)) {
         seen.add(d.id);
-        raw.push({ _id: d.id, ...(d.data() as FirestoreSession) });
+        const docData = d.data() as Partial<FirestoreSession>;
+        // Guard against malformed docs
+        if (!docData.mentorId || !docData.learnerId) continue;
+        raw.push({ _id: d.id, ...(docData as FirestoreSession) });
       }
     }
   }
 
   if (raw.length === 0) return [];
 
-  // Resolve mentor/learner user objects in one batch
-  const allUsers = await getUsers();
-  const usersMap = new Map(allUsers.map((u) => [u._id, u]));
+  // Resolve mentor/learner user objects — degrade gracefully if users collection fails
+  let usersMap = new Map<string, BackendUser>();
+  try {
+    const allUsers = await getUsers();
+    usersMap = new Map(allUsers.map((u) => [u._id, u]));
+  } catch {
+    // Non-fatal — sessions still display with placeholder names
+  }
 
   return raw
     .map((session) => ({
       _id: session._id,
-      title: session.title || session.skill,
+      title: session.title || session.skill || "Untitled Session",
       mentor: usersMap.get(session.mentorId) ?? {
         _id: session.mentorId, name: "Unknown Mentor", email: "", skillsOffered: [], skillsWanted: [],
       },
       learner: usersMap.get(session.learnerId) ?? {
         _id: session.learnerId, name: "Unknown Learner", email: "", skillsOffered: [], skillsWanted: [],
       },
-      date: session.date,
-      status: session.status,
+      date: session.date ?? new Date().toISOString(),
+      status: session.status ?? "upcoming",
+      callStatus: session.callStatus,
     }))
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }

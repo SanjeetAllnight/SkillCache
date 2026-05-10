@@ -4,7 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 
 import { Icon } from "@/components/ui/icon";
-import { useWebRTC, type ConnectionPhase } from "@/hooks/useWebRTC";
+import { useWebRTC, type ConnectionPhase, type MediaMode } from "@/hooks/useWebRTC";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   getSessionById,
@@ -45,11 +45,15 @@ export default function CallPage() {
     remoteStream,
     isConnected,
     connectionPhase,
+    mediaMode,
     error: rtcError,
     startCall,
     joinCall,
     endCall,
   } = useWebRTC({ callId: sessionId, myUid });
+
+  // Convenience: does the local stream actually have video tracks?
+  const hasLocalVideo = (localStream?.getVideoTracks().length ?? 0) > 0;
 
   // ── Video refs ─────────────────────────────────────────────────────────────
   const localVideoRef  = useRef<HTMLVideoElement>(null);
@@ -177,16 +181,24 @@ export default function CallPage() {
   // ── Status pill config ────────────────────────────────────────────────────
   type PillConfig = { label: string; color: string; dot: string };
   const pillConfig: Record<ConnectionPhase, PillConfig> = {
-    idle:      { label: "Ready",              color: "text-stone-400",   dot: "bg-stone-500" },
-    waiting:   { label: "Waiting…",           color: "text-sky-400",     dot: "bg-sky-400 animate-pulse" },
-    joining:   { label: "Connecting…",        color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
-    connected: { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
-    ended:     { label: "Call Ended",         color: "text-red-400",     dot: "bg-red-500" },
+    idle:       { label: "Ready",               color: "text-stone-400",   dot: "bg-stone-500" },
+    waiting:    { label: "Waiting…",            color: "text-sky-400",     dot: "bg-sky-400 animate-pulse" },
+    ringing:    { label: "Ringing…",            color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
+    connecting: { label: "Connecting…",         color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
+    connected:  { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
+    ended:      { label: "Call Ended",          color: "text-red-400",     dot: "bg-red-500" },
   };
   const pill = pillConfig[connectionPhase];
 
-  // Controls disabled until a real stream is flowing and truly connected
-  const controlsEnabled = connectionPhase === "connected";
+  // Controls: mute available when any local stream exists; camera only when video tracks exist
+  const canMute   = !!localStream && connectionPhase === "connected";
+  const canCamera = hasLocalVideo && connectionPhase === "connected";
+
+  // Phases where a spinner should show in the control bar
+  const isInProgress =
+    connectionPhase === "waiting" ||
+    connectionPhase === "ringing" ||
+    connectionPhase === "connecting";
 
   // ─── Guard renders ─────────────────────────────────────────────────────────
 
@@ -260,7 +272,7 @@ export default function CallPage() {
       {!remoteStream && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-gradient-to-br from-stone-900 via-stone-950 to-black">
           <div className="flex h-24 w-24 items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10">
-            {connectionPhase === "waiting" || connectionPhase === "joining" ? (
+            {connectionPhase === "waiting" || connectionPhase === "ringing" || connectionPhase === "connecting" ? (
               <Spinner className="h-9 w-9 text-sky-400" />
             ) : (
               <Icon name="person" className="text-5xl text-stone-500" />
@@ -273,13 +285,14 @@ export default function CallPage() {
               )}
               {connectionPhase === "waiting" && (
                 isMentor
-                  ? "Waiting for other user to join…"
+                  ? "Waiting for learner to join…"
                   : "Waiting for mentor to start the call…"
               )}
-              {connectionPhase === "joining" && "Connecting…"}
+              {connectionPhase === "ringing" && "Mentor started the session — tap Join Call"}
+              {connectionPhase === "connecting" && "Connecting…"}
               {connectionPhase === "ended" && "Call Ended"}
             </p>
-            {(connectionPhase === "waiting" || connectionPhase === "joining") && (
+            {(connectionPhase === "waiting" || connectionPhase === "ringing" || connectionPhase === "connecting") && (
               <p className="text-xs text-stone-500">
                 This may take a moment
               </p>
@@ -358,9 +371,15 @@ export default function CallPage() {
           playsInline
           className="h-full w-full object-cover"
         />
-        {(isCameraOff || !localStream) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/90">
+        {(isCameraOff || !hasLocalVideo) && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-stone-900/90">
             <Icon name="videocam_off" className="text-3xl text-stone-500" />
+            {mediaMode === "audio-only" && (
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-amber-400">Audio Only</span>
+            )}
+            {mediaMode === "none" && (
+              <span className="text-[9px] font-semibold uppercase tracking-wide text-stone-500">No Media</span>
+            )}
           </div>
         )}
         <div className="absolute bottom-2 left-2 rounded-md bg-stone-900/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-md">
@@ -373,6 +392,12 @@ export default function CallPage() {
         )}
       </div>
 
+      {/* Media mode banner — shown when camera unavailable */}
+      {(connectionPhase === "connected" || connectionPhase === "connecting" || connectionPhase === "waiting") &&
+        mediaMode !== "full" && (
+        <MediaModeBanner mode={mediaMode} />
+      )}
+
       {/* RTC Error banner */}
       {rtcError && (
         <div
@@ -383,20 +408,22 @@ export default function CallPage() {
         </div>
       )}
 
-      {/* ── Connection status overlay (waiting / joining) ── */}
-      {(connectionPhase === "waiting" || connectionPhase === "joining") && remoteStream === null && (
+      {/* ── Connection status overlay (waiting / ringing / connecting) ── */}
+      {(connectionPhase === "waiting" || connectionPhase === "ringing" || connectionPhase === "connecting") && remoteStream === null && (
         <div className="absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2 mt-16">
           <div className="flex flex-col items-center gap-2 rounded-2xl border border-white/10 bg-stone-900/80 px-6 py-4 backdrop-blur-xl shadow-2xl">
             <Spinner className="h-5 w-5 text-sky-400" />
             <span className="text-xs font-semibold text-sky-300 uppercase tracking-widest">
-              {connectionPhase === "waiting" ? "Waiting" : "Connecting"}
+              {connectionPhase === "waiting" ? "Waiting" : connectionPhase === "ringing" ? "Ringing" : "Connecting"}
             </span>
             <p className="text-[11px] text-stone-400 text-center max-w-[180px]">
               {connectionPhase === "waiting" && isMentor
-                ? "Waiting for other user to join…"
+                ? "Waiting for learner to join…"
                 : connectionPhase === "waiting" && !isMentor
                 ? "Waiting for mentor to start…"
-                : "Connected — establishing stream…"}
+                : connectionPhase === "ringing"
+                ? "Mentor started the session"
+                : "Establishing secure stream…"}
             </p>
           </div>
         </div>
@@ -413,24 +440,24 @@ export default function CallPage() {
       {/* Control bar */}
       <nav className="absolute bottom-5 left-1/2 z-30 flex w-[calc(100%-2.5rem)] max-w-3xl -translate-x-1/2 items-center justify-center gap-3 rounded-2xl border border-white/10 bg-stone-900/80 px-4 py-3 shadow-2xl backdrop-blur-2xl sm:w-auto sm:px-6 md:bottom-8 md:gap-4 md:px-8 md:py-4">
 
-        {/* Mute — only active once connected */}
+        {/* Mute — enabled when any local stream active */}
         <ControlButton
           id="btn-mute"
           icon={isMuted ? "mic_off" : "mic"}
           label={isMuted ? "Unmute" : "Mute"}
           active={isMuted}
           onClick={toggleMute}
-          disabled={!controlsEnabled || !localStream}
+          disabled={!canMute}
         />
 
-        {/* Camera — only active once connected */}
+        {/* Camera — enabled only when video tracks available */}
         <ControlButton
           id="btn-camera"
-          icon={isCameraOff ? "videocam_off" : "videocam"}
-          label={isCameraOff ? "Cam On" : "Cam Off"}
-          active={isCameraOff}
+          icon={isCameraOff || !hasLocalVideo ? "videocam_off" : "videocam"}
+          label={!hasLocalVideo ? "No Cam" : isCameraOff ? "Cam On" : "Cam Off"}
+          active={isCameraOff || !hasLocalVideo}
           onClick={toggleCamera}
-          disabled={!controlsEnabled || !localStream}
+          disabled={!canCamera}
         />
 
         <div className="hidden h-10 w-px bg-white/10 md:block" />
@@ -451,7 +478,7 @@ export default function CallPage() {
         {/* Learner: show a gated Join Call button */}
         {connectionPhase === "idle" && !isMentor && (
           <div className="flex flex-col items-center gap-1">
-            {sharedCallStatus === "started" || sharedCallStatus === "joined" ? (
+            {sharedCallStatus === "started" || sharedCallStatus === "joined" || sharedCallStatus === "connected" ? (
               // Mentor has started — learner can join
               <ControlButton
                 id="btn-join-call"
@@ -461,7 +488,7 @@ export default function CallPage() {
                 onClick={handleJoinCall}
               />
             ) : (
-              // Mentor hasn't started yet — show locked state
+              // Mentor hasn't started yet — locked
               <div className="flex flex-col items-center gap-1">
                 <div className="flex h-11 w-11 cursor-not-allowed items-center justify-center rounded-full bg-white/5 ring-1 ring-white/10 md:h-14 md:w-14">
                   <Icon name="call_received" className="text-xl text-stone-600 md:text-2xl" />
@@ -472,18 +499,31 @@ export default function CallPage() {
           </div>
         )}
 
-        {/* Spinner shown while waiting or joining */}
-        {(connectionPhase === "waiting" || connectionPhase === "joining") && (
+        {/* Learner in ringing state: show Join button even if connectionPhase advanced */}
+        {connectionPhase === "ringing" && !isMentor && (
+          <ControlButton
+            id="btn-join-call-ringing"
+            icon="call_received"
+            label="Join Call"
+            highlight="blue"
+            onClick={handleJoinCall}
+          />
+        )}
+
+        {/* Spinner shown while waiting, ringing, or connecting */}
+        {isInProgress && (
           <div className="flex flex-col items-center gap-1">
             <div className={`flex h-11 w-11 items-center justify-center rounded-full md:h-14 md:w-14 ${
               connectionPhase === "waiting" ? "bg-sky-500/20" : "bg-amber-500/20"
             }`}>
-              <Spinner className={`h-5 w-5 ${connectionPhase === "waiting" ? "text-sky-400" : "text-amber-400"}`} />
+              <Spinner className={`h-5 w-5 ${
+                connectionPhase === "waiting" ? "text-sky-400" : "text-amber-400"
+              }`} />
             </div>
             <span className={`text-[10px] uppercase tracking-tight ${
               connectionPhase === "waiting" ? "text-sky-400" : "text-amber-400"
             }`}>
-              {connectionPhase === "waiting" ? "Waiting" : "Joining"}
+              {connectionPhase === "waiting" ? "Waiting" : connectionPhase === "ringing" ? "Ringing" : "Joining"}
             </span>
           </div>
         )}
@@ -521,6 +561,37 @@ export default function CallPage() {
         </div>
       )}
     </main>
+  );
+}
+
+// ─── MediaModeBanner ──────────────────────────────────────────────────────────
+
+/**
+ * Shown when the local camera is unavailable or in audio-only mode.
+ * Positioned at the bottom of the screen above the control bar.
+ */
+function MediaModeBanner({ mode }: { mode: "audio-only" | "none" }) {
+  const config = {
+    "audio-only": {
+      icon: "mic",
+      text: "Audio-only mode — camera unavailable",
+      bg: "bg-amber-500/10 border-amber-500/30 text-amber-300",
+    },
+    none: {
+      icon: "videocam_off",
+      text: "Joined without camera or microphone",
+      bg: "bg-stone-700/60 border-stone-600/30 text-stone-300",
+    },
+  }[mode];
+
+  return (
+    <div
+      aria-live="polite"
+      className={`absolute bottom-28 left-1/2 z-20 -translate-x-1/2 flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold backdrop-blur-md md:bottom-32 ${config.bg}`}
+    >
+      <Icon name={config.icon} className="text-sm" />
+      {config.text}
+    </div>
   );
 }
 

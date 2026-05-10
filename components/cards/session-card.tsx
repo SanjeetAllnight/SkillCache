@@ -1,6 +1,11 @@
 import Image from "next/image";
 import Link from "next/link";
 
+// Helper: returns true only for http(s) URLs so we never feed <Image> a blank src
+function isValidUrl(src: string | undefined): src is string {
+  return typeof src === "string" && (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/"));
+}
+
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tag } from "@/components/ui/tag";
@@ -87,13 +92,19 @@ export function SessionCard({ session }: SessionCardProps) {
           />
         </div>
         <div className="mt-4 flex items-center gap-2">
-          <Image
-            src={session.avatar}
-            alt={session.title}
-            width={24}
-            height={24}
-            className="h-6 w-6 rounded-full object-cover"
-          />
+          {isValidUrl(session.avatar) ? (
+            <Image
+              src={session.avatar}
+              alt={session.title}
+              width={24}
+              height={24}
+              className="h-6 w-6 rounded-full object-cover"
+            />
+          ) : (
+            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-container text-[10px] font-bold text-on-primary-container">
+              {session.title[0]?.toUpperCase() ?? "S"}
+            </div>
+          )}
           <p className="text-xs font-medium text-on-surface-variant">
             {session.subtitle}
           </p>
@@ -128,15 +139,21 @@ export function SessionCard({ session }: SessionCardProps) {
           </div>
         </div>
         <div className="flex items-center justify-between border-t border-surface-container pt-4">
-          <Image
-            src={session.avatar}
-            alt={session.mentor}
-            width={32}
-            height={32}
-            className="h-8 w-8 rounded-full border-2 border-surface-container-lowest object-cover"
-          />
+          {isValidUrl(session.avatar) ? (
+            <Image
+              src={session.avatar}
+              alt={session.mentor}
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-full border-2 border-surface-container-lowest object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface-container-lowest bg-primary-container text-xs font-bold text-on-primary-container">
+              {session.mentor[0]?.toUpperCase() ?? "M"}
+            </div>
+          )}
           <Link
-            href={session.href ?? "/sessions/advanced-clay-glazing-techniques"}
+            href={session.href ?? "/sessions"}
             className="inline-flex items-center gap-1 text-sm font-bold text-primary transition-all hover:gap-2"
           >
             Details <Icon name="arrow_forward" className="text-sm" />
@@ -188,13 +205,21 @@ export function SessionCard({ session }: SessionCardProps) {
   return (
     <article className="group flex flex-col gap-6 rounded-2xl bg-surface-container-lowest p-6 editorial-shadow transition-all hover:-translate-y-1 md:flex-row md:gap-8 md:p-8">
       <div className="relative aspect-video w-full overflow-hidden rounded-2xl bg-surface-container md:w-1/3">
-        <Image
-          src={session.image}
-          alt={session.title}
-          fill
-          className="object-cover transition-transform duration-700 group-hover:scale-105"
-          sizes="(max-width: 768px) 100vw, 33vw"
-        />
+        {isValidUrl(session.image) ? (
+          <Image
+            src={session.image}
+            alt={session.title}
+            fill
+            className="object-cover transition-transform duration-700 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, 33vw"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-primary-container/30">
+            <span className="font-headline text-4xl font-bold text-primary/40">
+              {session.title[0]?.toUpperCase() ?? "S"}
+            </span>
+          </div>
+        )}
       </div>
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="flex flex-wrap items-center gap-2">

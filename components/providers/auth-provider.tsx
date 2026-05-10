@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useCallback,
   type ReactNode,
@@ -64,6 +65,13 @@ export function AuthProvider({
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [user, setUser] = useState<BackendUser | null>(null);
 
+  // Keep refs so the onAuthStateChanged closure always sees the latest values
+  // without needing to be re-registered on every route change.
+  const pathnameRef = useRef(pathname);
+  const routerRef = useRef(router);
+  useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  useEffect(() => { routerRef.current = router; }, [router]);
+
   const syncUserFromFirestore = useCallback(async (uid: string, email: string | null) => {
     const profile = await getUserProfile(uid);
     if (profile) {
@@ -93,10 +101,15 @@ export function AuthProvider({
         setBrowserAuthCookie(true);
 
         // Gate: if no Firestore doc or profileComplete === false → redirect
-        if (pathname && !pathname.startsWith("/complete-profile")) {
-          const profile = await getUserProfile(firebaseUser.uid);
-          if (!profile || profile.profileComplete === false) {
-            router.replace("/complete-profile");
+        const currentPath = pathnameRef.current;
+        if (currentPath && !currentPath.startsWith("/complete-profile")) {
+          try {
+            const profile = await getUserProfile(firebaseUser.uid);
+            if (!profile || profile.profileComplete === false) {
+              routerRef.current.replace("/complete-profile");
+            }
+          } catch {
+            // Non-fatal — profile check failed, don't redirect
           }
         }
       } else {
@@ -104,9 +117,10 @@ export function AuthProvider({
         setIsLoggedIn(false);
         setBrowserAuthCookie(false);
 
-        if (pathname && isProtectedPath(pathname)) {
-          const params = new URLSearchParams({ next: pathname }).toString();
-          router.replace(`/auth?${params}`);
+        const currentPath = pathnameRef.current;
+        if (currentPath && isProtectedPath(currentPath)) {
+          const params = new URLSearchParams({ next: currentPath }).toString();
+          routerRef.current.replace(`/auth?${params}`);
         }
       }
 
@@ -114,7 +128,8 @@ export function AuthProvider({
     });
 
     return () => unsubscribe();
-  }, [pathname, router, syncUserFromFirestore]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncUserFromFirestore]); // intentionally omit pathname/router — use refs instead
 
   const login = useCallback(async (credentials: { email: string; password: string }, redirectTo = DEFAULT_AUTH_REDIRECT) => {
     await signInWithEmailAndPassword(auth, credentials.email, credentials.password);

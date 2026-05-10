@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -83,15 +82,10 @@ export function Navbar() {
             </button>
             <Link
               href="/profile"
-              className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-primary-container transition-transform hover:scale-[1.02]"
+              className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-full border-2 border-primary-container bg-primary-container font-headline text-sm font-bold text-on-primary-container transition-transform hover:scale-[1.02]"
+              aria-label="Go to profile"
             >
-              <Image
-                src={user?.avatar ?? "/default-avatar.png"}
-                alt={user?.name ?? "User avatar"}
-                fill
-                className="object-cover"
-                sizes="40px"
-              />
+              {user?.name ? user.name[0].toUpperCase() : "?"}
             </Link>
           </>
         ) : null}

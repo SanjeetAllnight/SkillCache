@@ -246,22 +246,37 @@ export default function SessionsPage() {
   const [showModal, setShowModal] = useState(false);
 
   // ── Load sessions for current user ──────────────────────────────────────
-  const load = useCallback(async (uid: string) => {
+  const load = useCallback(async (uid: string, signal: { cancelled: boolean }) => {
     setIsLoading(true);
     setError(null);
     try {
       const data = await getSessionsForUser(uid);
-      setSessions(data);
+      if (signal.cancelled) return;
+      setSessions(data ?? []);
     } catch (err) {
+      if (signal.cancelled) return;
       setError((err as Error).message ?? "Unable to load sessions.");
     } finally {
-      setIsLoading(false);
+      if (!signal.cancelled) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!isAuthReady || !user?._id) return;
-    void load(user._id);
+    if (!isAuthReady) return;
+
+    // Not logged in — resolve loading immediately with empty state
+    if (!user?._id) {
+      setIsLoading(false);
+      setSessions([]);
+      return;
+    }
+
+    const signal = { cancelled: false };
+    void load(user._id, signal);
+
+    return () => {
+      signal.cancelled = true;
+    };
   }, [isAuthReady, user?._id, load]);
 
   // ── Derived buckets ──────────────────────────────────────────────────────
@@ -281,7 +296,10 @@ export default function SessionsPage() {
   // ── After session created — close modal + reload ─────────────────────────
   const handleCreated = useCallback(() => {
     setShowModal(false);
-    if (user?._id) void load(user._id);
+    if (user?._id) {
+      const signal = { cancelled: false };
+      void load(user._id, signal);
+    }
   }, [user, load]);
 
   return (

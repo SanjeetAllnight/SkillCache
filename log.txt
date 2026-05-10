@@ -1,0 +1,9 @@
+
+> skillcache-digital-atelier@1.0.0 dev
+> next dev
+
+▲ Next.js 16.2.2 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.18.171.51:3000
+- Environments: .env
+✓ Ready in 213ms

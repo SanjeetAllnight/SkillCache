@@ -41,6 +41,7 @@ import {
   addDoc,
   arrayUnion,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   onSnapshot,
@@ -189,10 +190,27 @@ export async function sendSignal(
  * Marks the call as ended. Either participant can call this.
  */
 export async function endCall(callId: string): Promise<void> {
-  await updateDoc(callDocRef(callId), {
-    status: "ended",
-    updatedAt: serverTimestamp(),
-  });
+  try {
+    await updateDoc(callDocRef(callId), {
+      status: "ended",
+      updatedAt: serverTimestamp(),
+    });
+  } catch {
+    // doc may already be gone — best-effort
+  }
+}
+
+/**
+ * Deletes the call document entirely (candidates sub-collection is
+ * cleaned up by a Cloud Function or left to TTL rules).
+ * Call this AFTER the "ended" status has been delivered to both sides.
+ */
+export async function clearCallDoc(callId: string): Promise<void> {
+  try {
+    await deleteDoc(callDocRef(callId));
+  } catch {
+    // best-effort
+  }
 }
 
 // ─── getCallOffer ─────────────────────────────────────────────────────────────

@@ -1,13 +1,10 @@
 /**
  * lib/webrtc.ts
- * WebRTC helper service built on top of simple-peer.
- * Designed for Next.js (App Router) – always import from a "use client" boundary.
+ * @deprecated This file is no longer used by useWebRTC.ts.
+ * The hook now uses native RTCPeerConnection directly (no simple-peer).
+ * Kept for reference only — safe to delete once all call routes confirmed stable.
  *
- * Usage:
- *   const peer = createPeer({ stream, initiator: true });
- *   peer.on("signal", (data) => sendViaFirebase(data));
- *   peer.on("stream", (remoteStream) => (videoEl.srcObject = remoteStream));
- *   peer.signal(incomingSignalFromFirebase);
+ * WebRTC helper service previously built on top of simple-peer.
  */
 
 // simple-peer only works in the browser (it needs window/RTCPeerConnection).

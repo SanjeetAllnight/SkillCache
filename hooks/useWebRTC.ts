@@ -2,39 +2,30 @@
 /**
  * hooks/useWebRTC.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Self-contained WebRTC hook with strict role enforcement.
+ * Native RTCPeerConnection WebRTC hook — NO simple-peer.
  *
  * Roles
  * ─────
- *   • Mentor  = initiator  → calls startCall() → createOffer only
- *   • Learner = receiver   → calls joinCall()  → createAnswer only
+ *   • Mentor  = initiator → startCall() → createOffer ONLY
+ *   • Learner = receiver  → joinCall()  → createAnswer ONLY
  *
- * Key guarantees
- * ──────────────
- *   1. hasStartedRef prevents both sides from initiating simultaneously.
- *   2. joinCall() watches Firestore in real-time and auto-connects the
- *      moment the mentor's offer lands — no manual polling required.
- *   3. The `connectionPhase` field gives the UI a richer status than
- *      the raw `isConnected` boolean.
+ * Guards
+ * ──────
+ *   isInitializedRef      — prevents double-init
+ *   hasCreatedOfferRef    — mentor creates offer exactly once
+ *   hasProcessedOfferRef  — learner processes offer exactly once
+ *   hasProcessedAnswerRef — mentor processes answer exactly once
+ *   iceCandidateQueueRef  — buffers ICE until remoteDescription is set
  *
- * Public API
- * ──────────
- *   const {
- *     localStream,      // MediaStream | null
- *     remoteStream,     // MediaStream | null
- *     isConnected,      // boolean
- *     connectionPhase,  // "idle"|"waiting"|"joining"|"connected"|"ended"
- *     callStatus,       // "ringing"|"active"|"ended"|null  (Firestore)
- *     error,            // string | null
- *     startCall,        // () => Promise<void>  — mentor / initiator
- *     joinCall,         // () => Promise<void>  — learner / receiver
- *     endCall,          // () => Promise<void>  — either side
- *   } = useWebRTC({ callId, myUid });
- * ─────────────────────────────────────────────────────────────────────────────
+ * Media fallback (never blocks peer connection)
+ * ─────────────────────────────────────────────
+ *   1. Try video + audio (full)
+ *   2. If camera unavailable → try audio-only
+ *   3. If all media unavailable → empty MediaStream (still connects)
+ *   mediaMode reflects which tier was used.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import SimplePeer, { type Instance, type SignalData } from "simple-peer";
+import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   createCall,
   endCall as firestoreEndCall,
@@ -47,41 +38,48 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-/** Fine-grained phase driven by this hook — maps 1-to-1 to the UI overlay states. */
-export type ConnectionPhase = "idle" | "waiting" | "joining" | "connected" | "ended";
+export type ConnectionPhase =
+  | "idle"        // not started
+  | "waiting"     // mentor: waiting for learner
+  | "ringing"     // learner: mentor started, awaiting join tap
+  | "connecting"  // SDP exchange in progress
+  | "connected"   // ICE connected, streams flowing
+  | "ended";
 
 export interface UseWebRTCOptions {
-  /** Firestore document ID – use the session ID so the call is scoped to it. */
   callId: string;
-  /** Firebase Auth UID of the current user. */
   myUid: string;
-  /** getUserMedia constraints. Defaults to camera + microphone. */
   mediaConstraints?: MediaStreamConstraints;
-  /** STUN / TURN server list. Defaults to Google's public STUN servers. */
   iceServers?: RTCIceServer[];
 }
+
+/** What media tier was acquired for the local stream. */
+export type MediaMode = "full" | "audio-only" | "none";
 
 export interface UseWebRTCReturn {
   localStream: MediaStream | null;
   remoteStream: MediaStream | null;
-  /** True once the WebRTC data-channel / ICE is fully connected. */
   isConnected: boolean;
-  /** Rich UX phase — use this to drive overlays and control bar states. */
   connectionPhase: ConnectionPhase;
-  /** Raw Firestore call-document status (ringing / active / ended). */
   callStatus: CallStatus | null;
+  /** Indicates which media tier is active — drives UI banners. */
+  mediaMode: MediaMode;
   error: string | null;
   startCall: () => Promise<void>;
   joinCall: () => Promise<void>;
   endCall: () => Promise<void>;
 }
 
-// ─── Default ICE configuration ────────────────────────────────────────────────
+// ─── Constants ────────────────────────────────────────────────────────────────
 
-const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+const DEFAULT_ICE: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  { urls: "stun:stun2.l.google.com:19302" },
 ];
+
+const log = (msg: string, ...a: unknown[]) =>
+  console.log(`[WebRTC] ${msg}`, ...a);
 
 // ─── Hook ─────────────────────────────────────────────────────────────────────
 
@@ -89,23 +87,21 @@ export function useWebRTC({
   callId,
   myUid,
   mediaConstraints = { video: true, audio: true },
-  iceServers = DEFAULT_ICE_SERVERS,
+  iceServers = DEFAULT_ICE,
 }: UseWebRTCOptions): UseWebRTCReturn {
 
   // ── Stable refs ───────────────────────────────────────────────────────────
-  const peerRef        = useRef<Instance | null>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const unsubRef       = useRef<(() => void) | null>(null);
-  /**
-   * Prevents both startCall() and joinCall() from running simultaneously.
-   * Reset to null in endCall() so a fresh call can start.
-   */
-  const hasStartedRef  = useRef<"initiator" | "receiver" | null>(null);
-  /**
-   * Prevent the receiver from creating multiple peer instances if the
-   * Firestore offer snapshot fires more than once.
-   */
-  const receiverPeerBuiltRef = useRef(false);
+  const pcRef              = useRef<RTCPeerConnection | null>(null);
+  const localStreamRef     = useRef<MediaStream | null>(null);
+  const unsubsRef          = useRef<Array<() => void>>([]);
+  const iceCandidateQueue  = useRef<RTCIceCandidateInit[]>([]);
+  const isMountedRef       = useRef(true);
+
+  // Signal-flow guards
+  const isInitializedRef      = useRef(false);
+  const hasCreatedOfferRef    = useRef(false);
+  const hasProcessedOfferRef  = useRef(false);
+  const hasProcessedAnswerRef = useRef(false);
 
   // ── Reactive state ────────────────────────────────────────────────────────
   const [localStream,     setLocalStream]     = useState<MediaStream | null>(null);
@@ -113,277 +109,374 @@ export function useWebRTC({
   const [isConnected,     setIsConnected]     = useState(false);
   const [connectionPhase, setConnectionPhase] = useState<ConnectionPhase>("idle");
   const [callStatus,      setCallStatus]      = useState<CallStatus | null>(null);
+  const [mediaMode,       setMediaMode]       = useState<MediaMode>("none");
   const [error,           setError]           = useState<string | null>(null);
 
-  // ── Cleanup on unmount ────────────────────────────────────────────────────
+  // ── Unmount cleanup ───────────────────────────────────────────────────────
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
-      unsubRef.current?.();
-      destroyPeer(peerRef.current);
-      stopAllTracks(localStreamRef.current);
+      isMountedRef.current = false;
+      _cleanup(false);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Internal helpers
+  // Internal helpers — all use only stable refs so closure-capture is safe
   // ─────────────────────────────────────────────────────────────────────────
 
-  /** Acquires camera + mic (idempotent). */
-  async function acquireLocalStream(): Promise<MediaStream> {
-    if (localStreamRef.current) return localStreamRef.current;
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
-    } catch (err) {
-      throw new Error(`Camera / microphone access denied: ${(err as Error).message}`);
-    }
-    localStreamRef.current = stream;
-    setLocalStream(stream);
-    return stream;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  function safeSet(setter: Dispatch<SetStateAction<any>>, v: unknown) {
+    if (isMountedRef.current) setter(v);
   }
 
   /**
-   * Builds a SimplePeer instance with event listeners.
-   * @param initiator  true = mentor (creates offer), false = learner (creates answer).
-   */
-  function buildPeer(
-    stream: MediaStream,
-    initiator: boolean,
-    onSignal: (data: SignalData) => void
-  ): Instance {
-    destroyPeer(peerRef.current);
-    unsubRef.current?.();
-
-    const peer = new SimplePeer({
-      initiator,
-      trickle: true,
-      stream,
-      config: { iceServers },
-    });
-
-    peer.on("signal",  onSignal);
-    peer.on("stream",  (s: MediaStream) => setRemoteStream(s));
-    peer.on("connect", () => {
-      setIsConnected(true);
-      setConnectionPhase("connected");
-    });
-    peer.on("close",   () => {
-      setIsConnected(false);
-    });
-    peer.on("error",   (e: Error) => setError(e.message));
-
-    peerRef.current = peer;
-    return peer;
-  }
-
-  /**
-   * Subscribes to Firestore real-time signals for this call.
-   * Role-specific: initiator only handles answer, receiver only handles offer.
-   */
-  function attachFirestoreListeners(role: "initiator" | "receiver") {
-    unsubRef.current?.();
-
-    const unsub = listenForSignals(callId, myUid, {
-      // Receiver: when offer arrives (real-time), build peer + answer
-      onOffer:
-        role === "receiver"
-          ? (offer) => {
-              if (receiverPeerBuiltRef.current) return; // idempotent
-              receiverPeerBuiltRef.current = true;
-              setConnectionPhase("joining");
-              void buildReceiverPeer(offer);
-            }
-          : undefined,
-
-      // Initiator: when answer arrives, feed it into the peer
-      onAnswer:
-        role === "initiator"
-          ? (answer) => peerRef.current?.signal(answer as unknown as SignalData)
-          : undefined,
-
-      // Both: exchange ICE candidates
-      onCandidate: (candidate) =>
-        peerRef.current?.signal(candidate as unknown as SignalData),
-
-      // Both: watch Firestore status
-      onStatusChange: (status) => {
-        setCallStatus(status);
-        if (status === "ended") void tearDown(false);
-      },
-    });
-
-    unsubRef.current = unsub;
-  }
-
-  /**
-   * Helper: builds the receiver (learner) peer from a known offer.
-   * Separated so it can be called both from joinCall() (when offer exists)
-   * and from the onOffer Firestore listener (reactive join).
-   */
-  async function buildReceiverPeer(offer: RTCSessionDescriptionInit) {
-    const stream = await acquireLocalStream();
-    let answerSaved = false;
-
-    const peer = buildPeer(stream, false, async (data: SignalData) => {
-      if (data.type === "answer" && !answerSaved) {
-        answerSaved = true;
-        await firestoreJoinCall(callId, myUid, data as RTCSessionDescriptionInit);
-        return;
-      }
-      if (!data.type) {
-        await sendSignal(callId, myUid, data as RTCIceCandidateInit);
-      }
-    });
-
-    // Feed the offer → triggers peer to generate an answer
-    peer.signal(offer as unknown as SignalData);
-  }
-
-  /** Tears down the peer + media. Pass true only when we're initiating the end. */
-  async function tearDown(updateFirestore: boolean) {
-    unsubRef.current?.();
-    unsubRef.current = null;
-
-    destroyPeer(peerRef.current);
-    peerRef.current = null;
-
-    stopAllTracks(localStreamRef.current);
-    localStreamRef.current = null;
-
-    hasStartedRef.current       = null;
-    receiverPeerBuiltRef.current = false;
-
-    setLocalStream(null);
-    setRemoteStream(null);
-    setIsConnected(false);
-    setConnectionPhase("ended");
-
-    if (updateFirestore) {
-      try { await firestoreEndCall(callId); } catch { /* best-effort */ }
-    }
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Public API
-  // ─────────────────────────────────────────────────────────────────────────
-
-  /**
-   * **startCall** — MENTOR / INITIATOR only.
+   * Tiered media acquisition — NEVER throws, always returns a MediaStream.
    *
-   * Flow:
-   *   getUserMedia → build initiator peer (creates SDP offer automatically)
-   *   → offer signal → createCall() writes offer to Firestore
-   *   → attachFirestoreListeners("initiator") waits for learner's answer + ICE
-   *   → ICE exchange → connected
+   * Tier 1: video + audio  → mediaMode "full"
+   * Tier 2: audio only     → mediaMode "audio-only" (camera in use / missing)
+   * Tier 3: empty stream   → mediaMode "none"  (no devices at all)
+   */
+  async function acquireMedia(): Promise<MediaStream> {
+    if (localStreamRef.current) return localStreamRef.current;
+    log("Acquiring local media — trying video+audio first");
+
+    // Tier 1: full media
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = s;
+      safeSet(setLocalStream, s);
+      safeSet(setMediaMode, "full");
+      log("Media acquired: full (video+audio)");
+      return s;
+    } catch (e1) {
+      log("Full media failed:", (e1 as Error).message, "— trying audio-only");
+    }
+
+    // Tier 2: audio only
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+      localStreamRef.current = s;
+      safeSet(setLocalStream, s);
+      safeSet(setMediaMode, "audio-only");
+      log("Media acquired: audio-only");
+      return s;
+    } catch (e2) {
+      log("Audio-only also failed:", (e2 as Error).message, "— using empty stream");
+    }
+
+    // Tier 3: empty stream — peer connection still works, remote stream still receives
+    const empty = new MediaStream();
+    localStreamRef.current = empty;
+    safeSet(setLocalStream, empty);
+    safeSet(setMediaMode, "none");
+    log("Media acquired: none (empty stream)");
+    return empty;
+  }
+
+  function buildPC(): RTCPeerConnection {
+    _closePC(); // destroy any existing connection first
+    log("Creating RTCPeerConnection");
+    const pc = new RTCPeerConnection({ iceServers });
+
+    pc.ontrack = (ev) => {
+      log("Remote track received:", ev.track.kind);
+      const [stream] = ev.streams;
+      if (stream) safeSet(setRemoteStream, stream);
+    };
+
+    pc.onicecandidate = (ev) => {
+      if (!ev.candidate) { log("ICE gathering complete"); return; }
+      log("Sending ICE candidate");
+      sendSignal(callId, myUid, ev.candidate.toJSON()).catch(
+        (e) => console.error("[WebRTC] sendSignal failed:", e)
+      );
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      log("ICE state:", pc.iceConnectionState);
+      if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+        safeSet(setIsConnected, true);
+        safeSet(setConnectionPhase, "connected" as ConnectionPhase);
+      } else if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "closed") {
+        safeSet(setIsConnected, false);
+        safeSet(setConnectionPhase, "ended" as ConnectionPhase);
+      } else if (pc.iceConnectionState === "disconnected") {
+        safeSet(setIsConnected, false);
+      }
+    };
+
+    pc.onconnectionstatechange = () => log("Connection state:", pc.connectionState);
+    pc.onsignalingstatechange  = () => log("Signaling state:", pc.signalingState);
+
+    pcRef.current = pc;
+    return pc;
+  }
+
+  function _closePC() {
+    const pc = pcRef.current;
+    if (!pc) return;
+    pc.ontrack = null;
+    pc.onicecandidate = null;
+    pc.oniceconnectionstatechange = null;
+    pc.onconnectionstatechange = null;
+    pc.onsignalingstatechange = null;
+    try { pc.close(); } catch { /* ignore */ }
+    pcRef.current = null;
+  }
+
+  function _unsubAll() {
+    unsubsRef.current.forEach((u) => { try { u(); } catch { /* ignore */ } });
+    unsubsRef.current = [];
+  }
+
+  function _resetGuards() {
+    isInitializedRef.current      = false;
+    hasCreatedOfferRef.current    = false;
+    hasProcessedOfferRef.current  = false;
+    hasProcessedAnswerRef.current = false;
+    iceCandidateQueue.current     = [];
+  }
+
+  function _cleanup(notifyFirestore: boolean) {
+    log("Cleanup — notifyFirestore:", notifyFirestore);
+    _unsubAll();
+    _closePC();
+    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    localStreamRef.current = null;
+    _resetGuards();
+    safeSet(setLocalStream,     null);
+    safeSet(setRemoteStream,    null);
+    safeSet(setIsConnected,     false);
+    safeSet(setMediaMode,       "none");
+    safeSet(setConnectionPhase, "ended" as ConnectionPhase);
+    if (notifyFirestore) firestoreEndCall(callId).catch(() => { /* best-effort */ });
+  }
+
+  async function drainICEQueue(pc: RTCPeerConnection) {
+    const queued = iceCandidateQueue.current.splice(0);
+    if (!queued.length) return;
+    log(`Draining ${queued.length} buffered ICE candidates`);
+    for (const c of queued) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)); }
+      catch (e) { console.error("[WebRTC] Queued ICE failed:", e); }
+    }
+  }
+
+  async function handleICE(candidate: RTCIceCandidateInit) {
+    const pc = pcRef.current;
+    if (!pc) return;
+    if (!pc.remoteDescription) {
+      log("ICE buffered (no remoteDescription yet)");
+      iceCandidateQueue.current.push(candidate);
+      return;
+    }
+    try { await pc.addIceCandidate(new RTCIceCandidate(candidate)); log("ICE applied"); }
+    catch (e) { console.error("[WebRTC] addIceCandidate failed:", e); }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PUBLIC API
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * MENTOR / INITIATOR — creates offer, writes to Firestore, waits for answer.
    */
   const startCall = useCallback(async () => {
-    if (hasStartedRef.current) {
-      setError("Call already started.");
-      return;
-    }
-    hasStartedRef.current = "initiator";
-    setError(null);
-    setConnectionPhase("waiting"); // mentor is waiting for learner to join
+    if (isInitializedRef.current) { log("startCall: already running"); return; }
+    if (!callId || !myUid) { setError("Missing callId or uid"); return; }
+
+    isInitializedRef.current = true;
+    safeSet(setError, null);
+    safeSet(setConnectionPhase, "waiting" as ConnectionPhase);
 
     try {
-      const stream = await acquireLocalStream();
-      let offerSaved = false;
+      const stream = await acquireMedia(); // never throws
+      const pc     = buildPC();
 
-      buildPeer(stream, true, async (data: SignalData) => {
-        if (data.type === "offer" && !offerSaved) {
-          offerSaved = true;
-          await createCall(callId, myUid, data as RTCSessionDescriptionInit);
-          // Now listen for the learner's answer + ICE candidates
-          attachFirestoreListeners("initiator");
-          return;
-        }
-        if (!data.type) {
-          await sendSignal(callId, myUid, data as RTCIceCandidateInit);
-        }
+      // Only add tracks if the stream has them (skip for empty stream)
+      const tracks = stream.getTracks();
+      if (tracks.length > 0) {
+        tracks.forEach((t) => { pc.addTrack(t, stream); log("Track added:", t.kind); });
+      } else {
+        log("No local tracks — proceeding with receive-only offer");
+      }
+
+      // Create offer — guarded
+      if (hasCreatedOfferRef.current) { log("Offer already created"); return; }
+      hasCreatedOfferRef.current = true;
+      log("Mentor: creating offer");
+
+      // offerToReceiveVideo/Audio ensures mentor can receive learner stream
+      // even if learner joins without camera
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
       });
-    } catch (err) {
-      hasStartedRef.current = null;
-      setConnectionPhase("idle");
-      setError((err as Error).message);
+
+      if (pc.signalingState !== "stable") {
+        throw new Error(`Bad signalingState for offer: ${pc.signalingState}`);
+      }
+      await pc.setLocalDescription(offer);
+      log("Mentor: local description (offer) set");
+
+      await createCall(callId, myUid, { type: offer.type, sdp: offer.sdp! });
+      log("Offer written to Firestore");
+
+      // Listen for learner's answer + ICE
+      const unsub = listenForSignals(callId, myUid, {
+        onAnswer: async (answer) => {
+          if (hasProcessedAnswerRef.current) { log("Answer duplicate — ignored"); return; }
+          const p = pcRef.current;
+          if (!p) return;
+
+          if (p.signalingState !== "have-local-offer") {
+            log(`Cannot apply answer: signalingState is ${p.signalingState}`);
+            return;
+          }
+
+          hasProcessedAnswerRef.current = true;
+          log("Mentor: applying remote description (answer)");
+          try {
+            await p.setRemoteDescription(new RTCSessionDescription(answer));
+            log("Mentor: remote description set");
+            safeSet(setConnectionPhase, "connecting" as ConnectionPhase);
+            await drainICEQueue(p);
+          } catch (e) {
+            console.error("[WebRTC] setRemoteDescription (answer) failed:", e);
+            safeSet(setError, `Connection failed: ${(e as Error).message}`);
+          }
+        },
+        onCandidate: handleICE,
+        onStatusChange: (s) => {
+          safeSet(setCallStatus, s);
+          if (s === "ended") _cleanup(false);
+        },
+      });
+
+      unsubsRef.current.push(unsub);
+    } catch (e) {
+      log("startCall error:", e);
+      isInitializedRef.current   = false;
+      hasCreatedOfferRef.current = false;
+      safeSet(setConnectionPhase, "idle" as ConnectionPhase);
+      safeSet(setError, (e as Error).message);
     }
-  }, [callId, myUid, iceServers]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [callId, myUid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
-   * **joinCall** — LEARNER / RECEIVER only.
-   *
-   * Flow (two branches):
-   *   A) Offer already exists in Firestore → immediately build peer + answer.
-   *   B) Offer not yet written → attach Firestore listener; `onOffer` callback
-   *      fires reactively when the mentor's offer arrives, then buildReceiverPeer().
-   *
-   * In both cases the learner NEVER calls createOffer().
+   * LEARNER / RECEIVER — waits for offer (or reads immediately), creates answer.
    */
   const joinCall = useCallback(async () => {
-    if (hasStartedRef.current) {
-      setError("Already joining the call.");
-      return;
-    }
-    hasStartedRef.current = "receiver";
-    setError(null);
-    setConnectionPhase("waiting"); // waiting for offer to arrive
-    receiverPeerBuiltRef.current = false;
+    if (isInitializedRef.current) { log("joinCall: already running"); return; }
+    if (!callId || !myUid) { setError("Missing callId or uid"); return; }
+
+    isInitializedRef.current = true;
+    safeSet(setError, null);
+    safeSet(setConnectionPhase, "ringing" as ConnectionPhase);
 
     try {
-      // Speculatively acquire media so local video appears immediately
-      await acquireLocalStream();
+      const stream = await acquireMedia(); // never throws
+      const pc     = buildPC();
 
-      // Check if offer already exists
+      // Only add tracks if the stream has them
+      const tracks = stream.getTracks();
+      if (tracks.length > 0) {
+        tracks.forEach((t) => { pc.addTrack(t, stream); log("Learner track added:", t.kind); });
+      } else {
+        log("Learner: no local tracks — proceeding receive-only");
+      }
+
+      // Process offer → create answer
+      async function processOffer(offer: RTCSessionDescriptionInit) {
+        if (hasProcessedOfferRef.current) { log("Offer duplicate — ignored"); return; }
+        const p = pcRef.current;
+        if (!p) return;
+
+        if (p.signalingState !== "stable") {
+          log(`Cannot process offer: signalingState is ${p.signalingState}`);
+          return;
+        }
+
+        hasProcessedOfferRef.current = true;
+        safeSet(setConnectionPhase, "connecting" as ConnectionPhase);
+        log("Learner: applying remote description (offer)");
+
+        try {
+          await p.setRemoteDescription(new RTCSessionDescription(offer));
+          log("Learner: remote description set (offer)");
+          await drainICEQueue(p);
+
+          log("Learner: creating answer");
+          const answer = await p.createAnswer();
+
+          if ((p.signalingState as string) !== "have-remote-offer") {
+            log(`Cannot set local answer: signalingState is ${p.signalingState}`);
+            return;
+          }
+
+          await p.setLocalDescription(answer);
+          log("Learner: local description set (answer)");
+
+          await firestoreJoinCall(callId, myUid, { type: answer.type, sdp: answer.sdp! });
+          log("Answer written to Firestore");
+        } catch (e) {
+          console.error("[WebRTC] processOffer failed:", e);
+          safeSet(setError, `Connection failed: ${(e as Error).message}`);
+          hasProcessedOfferRef.current = false; // allow retry
+        }
+      }
+
+      // Check if offer already exists in Firestore
       const existingOffer = await getCallOffer(callId);
 
       if (existingOffer) {
-        // Offer is ready — connect immediately
-        receiverPeerBuiltRef.current = true;
-        setConnectionPhase("joining");
-        await buildReceiverPeer(existingOffer);
-        // Still attach listeners for ICE + status changes (no need for onOffer)
-        attachFirestoreListeners("receiver");
-      } else {
-        // Offer not yet available — listen reactively via Firestore
-        // The onOffer callback inside attachFirestoreListeners will build the peer
-        attachFirestoreListeners("receiver");
-        // Phase stays "waiting" until offer arrives
-      }
-    } catch (err) {
-      hasStartedRef.current        = null;
-      receiverPeerBuiltRef.current = false;
-      setConnectionPhase("idle");
-      setError((err as Error).message);
-    }
-  }, [callId, myUid, iceServers]); // eslint-disable-line react-hooks/exhaustive-deps
+        log("Existing offer found — processing immediately");
+        await processOffer(existingOffer);
 
-  /**
-   * **endCall** — either side.
-   * Stops all media, destroys the peer, writes "ended" to Firestore.
-   */
+        const unsub = listenForSignals(callId, myUid, {
+          onCandidate: handleICE,
+          onStatusChange: (s) => {
+            safeSet(setCallStatus, s);
+            if (s === "ended") _cleanup(false);
+          },
+        });
+        unsubsRef.current.push(unsub);
+      } else {
+        log("No offer yet — listening reactively");
+        const unsub = listenForSignals(callId, myUid, {
+          onOffer: processOffer,
+          onCandidate: handleICE,
+          onStatusChange: (s) => {
+            safeSet(setCallStatus, s);
+            if (s === "ended") _cleanup(false);
+          },
+        });
+        unsubsRef.current.push(unsub);
+      }
+    } catch (e) {
+      log("joinCall error:", e);
+      isInitializedRef.current = false;
+      safeSet(setConnectionPhase, "idle" as ConnectionPhase);
+      safeSet(setError, (e as Error).message);
+    }
+  }, [callId, myUid]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const endCall = useCallback(async () => {
-    await tearDown(true);
+    log("endCall triggered");
+    _cleanup(true);
   }, [callId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Return ────────────────────────────────────────────────────────────────
   return {
     localStream,
     remoteStream,
     isConnected,
     connectionPhase,
     callStatus,
+    mediaMode,
     error,
     startCall,
     joinCall,
     endCall,
   };
-}
-
-// ─── Module-level utilities ───────────────────────────────────────────────────
-
-function destroyPeer(peer: Instance | null | undefined) {
-  try { peer?.destroy(); } catch { /* ignore */ }
-}
-
-function stopAllTracks(stream: MediaStream | null | undefined) {
-  stream?.getTracks().forEach((t) => t.stop());
 }
