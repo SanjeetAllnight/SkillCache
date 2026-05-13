@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -10,8 +11,32 @@ import { getHeaderConfig } from "@/lib/shell-config";
 
 export function Navbar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const config = getHeaderConfig(pathname);
   const { user, isLoggedIn, logout } = useAuth();
+
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") || "");
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  const handleSearchChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const val = e.target.value;
+      setSearchQuery(val);
+
+      const params = new URLSearchParams(searchParams.toString());
+      if (val.trim()) {
+        params.set("q", val);
+      } else {
+        params.delete("q");
+      }
+      router.replace(`${pathname}?${params.toString()}`);
+    },
+    [pathname, router, searchParams]
+  );
 
   return (
     <header className="fixed left-0 right-0 top-0 z-40 flex h-16 items-center justify-between gap-4 bg-surface/80 px-5 backdrop-blur-xl sm:px-6 md:left-64 md:px-8 xl:px-12">
@@ -23,8 +48,8 @@ export function Navbar() {
           />
           <input
             type="text"
-            readOnly
-            value=""
+            value={searchQuery}
+            onChange={handleSearchChange}
             placeholder={config.placeholder}
             className="w-full border-none bg-transparent pl-8 pr-2 text-sm text-on-surface placeholder:text-stone-400 focus:outline-none focus:ring-0"
           />

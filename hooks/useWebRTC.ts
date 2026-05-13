@@ -102,6 +102,7 @@ export function useWebRTC({
   const hasCreatedOfferRef    = useRef(false);
   const hasProcessedOfferRef  = useRef(false);
   const hasProcessedAnswerRef = useRef(false);
+  const addedCandidatesRef    = useRef<Set<string>>(new Set());
 
   // ── Reactive state ────────────────────────────────────────────────────────
   const [localStream,     setLocalStream]     = useState<MediaStream | null>(null);
@@ -236,6 +237,7 @@ export function useWebRTC({
     hasProcessedOfferRef.current  = false;
     hasProcessedAnswerRef.current = false;
     iceCandidateQueue.current     = [];
+    addedCandidatesRef.current.clear();
   }
 
   function _cleanup(notifyFirestore: boolean) {
@@ -266,6 +268,11 @@ export function useWebRTC({
   async function handleICE(candidate: RTCIceCandidateInit) {
     const pc = pcRef.current;
     if (!pc) return;
+
+    const candidateStr = JSON.stringify(candidate);
+    if (addedCandidatesRef.current.has(candidateStr)) return;
+    addedCandidatesRef.current.add(candidateStr);
+
     if (!pc.remoteDescription) {
       log("ICE buffered (no remoteDescription yet)");
       iceCandidateQueue.current.push(candidate);
@@ -345,6 +352,7 @@ export function useWebRTC({
           } catch (e) {
             console.error("[WebRTC] setRemoteDescription (answer) failed:", e);
             safeSet(setError, `Connection failed: ${(e as Error).message}`);
+            _cleanup(false);
           }
         },
         onCandidate: handleICE,
@@ -357,8 +365,7 @@ export function useWebRTC({
       unsubsRef.current.push(unsub);
     } catch (e) {
       log("startCall error:", e);
-      isInitializedRef.current   = false;
-      hasCreatedOfferRef.current = false;
+      _cleanup(false);
       safeSet(setConnectionPhase, "idle" as ConnectionPhase);
       safeSet(setError, (e as Error).message);
     }
@@ -423,7 +430,7 @@ export function useWebRTC({
         } catch (e) {
           console.error("[WebRTC] processOffer failed:", e);
           safeSet(setError, `Connection failed: ${(e as Error).message}`);
-          hasProcessedOfferRef.current = false; // allow retry
+          _cleanup(false);
         }
       }
 
@@ -456,7 +463,7 @@ export function useWebRTC({
       }
     } catch (e) {
       log("joinCall error:", e);
-      isInitializedRef.current = false;
+      _cleanup(false);
       safeSet(setConnectionPhase, "idle" as ConnectionPhase);
       safeSet(setError, (e as Error).message);
     }

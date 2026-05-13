@@ -7,7 +7,7 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { DEFAULT_AUTH_REDIRECT, resolveAuthRedirect } from "@/lib/auth";
-import { authPageData } from "@/lib/mock-data";
+import { authPageData } from "@/lib/static-assets";
 
 type AuthPageViewProps = {
   nextPath?: string;

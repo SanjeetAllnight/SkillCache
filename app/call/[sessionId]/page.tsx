@@ -7,8 +7,11 @@ import { Icon } from "@/components/ui/icon";
 import { useWebRTC, type ConnectionPhase, type MediaMode } from "@/hooks/useWebRTC";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
-  getSessionById,
+  canJoinSession,
+  completeSession,
+  listenSessionById,
   listenToSessionCallStatus,
+  startSession,
   updateSessionCallStatus,
   type ApiSession,
   type CallStatus,
@@ -76,28 +79,55 @@ export default function CallPage() {
       return;
     }
 
-    let mounted = true;
-    async function load() {
-      try {
-        setSessionLoading(true);
-        const data = await getSessionById(sessionId);
-        if (!mounted) return;
+    setSessionLoading(true);
+    const unsubscribe = listenSessionById(
+      sessionId,
+      (data) => {
+        if (!data) {
+          setSessionError("Session not found.");
+          setSessionLoading(false);
+          return;
+        }
 
         const isParticipant =
-          data.mentor?._id === user!._id || data.learner?._id === user!._id;
-        if (!isParticipant) { setAccessDenied(true); return; }
+          data.mentorId === user._id || data.learnerId === user._id;
+        if (!isParticipant) {
+          setAccessDenied(true);
+          setSessionLoading(false);
+          return;
+        }
+
+        const allowedStatus =
+          data.status === "live" ||
+          data.status === "accepted" ||
+          data.status === "upcoming";
+        if (!allowedStatus) {
+          setSessionError(
+            data.status === "pending"
+              ? "This session request has not been accepted yet."
+              : `This session is ${data.status}. Calls are only available for accepted or live sessions.`,
+          );
+          setSessionLoading(false);
+          return;
+        }
+
+        if (data.status !== "live" && !canJoinSession(data)) {
+          setSessionError("The call room opens 15 minutes before the scheduled start time.");
+          setSessionLoading(false);
+          return;
+        }
 
         setSession(data);
-      } catch (err) {
-        if (!mounted) return;
-        setSessionError(err instanceof Error ? err.message : "Session not found.");
-      } finally {
-        if (mounted) setSessionLoading(false);
-      }
-    }
+        setSessionError(null);
+        setSessionLoading(false);
+      },
+      (err) => {
+        setSessionError(err.message || "Session not found.");
+        setSessionLoading(false);
+      },
+    );
 
-    void load();
-    return () => { mounted = false; };
+    return () => unsubscribe();
   }, [isAuthReady, sessionId, user, router]);
 
   // ── Bind streams ──────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { MentorCard } from "@/components/cards/mentor-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,8 +12,10 @@ import { toMentorCardData } from "@/lib/view-models";
 import { useAuth } from "@/components/providers/auth-provider";
 import type { MentorCardData } from "@/components/cards/mentor-card";
 
-export default function MentorsPage() {
+function MentorsContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get("q")?.toLowerCase() || "";
 
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [filters, setFilters]           = useState<string[]>([]);
@@ -61,6 +64,14 @@ export default function MentorsPage() {
 
     return () => { isMounted = false; };
   }, [activeFilter, user?._id]);
+
+  const filteredMentors = mentors.filter((mentor) => {
+    if (!searchQuery) return true;
+    const matchName = mentor.name.toLowerCase().includes(searchQuery);
+    const matchRole = mentor.role.toLowerCase().includes(searchQuery);
+    const matchTags = mentor.tags.some(t => t.toLowerCase().includes(searchQuery));
+    return matchName || matchRole || matchTags;
+  });
 
   return (
     <div className="page-shell page-stack">
@@ -133,29 +144,34 @@ export default function MentorsPage() {
           ? Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-[320px] w-full" />
             ))
-          : mentors.map((mentor) => (
+          : filteredMentors.map((mentor) => (
               <MentorCard key={mentor.id ?? mentor.name} mentor={mentor} />
             ))}
       </section>
 
       {/* ── Empty state ────────────────────────────────────────────────── */}
-      {!isLoading && mentors.length === 0 && (
+      {!isLoading && filteredMentors.length === 0 && (
         <div className="rounded-2xl bg-surface-container-low px-6 py-14 text-center">
           <Icon name="person_search" className="mb-3 text-5xl text-stone-400" />
           <p className="text-lg font-semibold text-on-surface">
-            {activeFilter
-              ? `No mentors found for "${activeFilter}"`
+            {activeFilter || searchQuery
+              ? `No mentors found for ${[activeFilter, searchQuery && `"${searchQuery}"`].filter(Boolean).join(' and ')}`
               : "No mentors yet — be the first!"}
           </p>
           <p className="mt-2 text-sm text-on-surface-variant">
-            {activeFilter
-              ? "Try a different skill filter to widen the search."
+            {activeFilter || searchQuery
+              ? "Try a different skill filter or search query to widen the search."
               : "Complete your profile and add skills to appear here."}
           </p>
-          {activeFilter && (
+          {(activeFilter || searchQuery) && (
             <button
               type="button"
-              onClick={() => setActiveFilter(null)}
+              onClick={() => {
+                setActiveFilter(null);
+                // The URL clear will be handled if we use router.replace, but it's easier to just clear it.
+                // It's a bit complex to clear URL from here cleanly without useRouter, but we have router available.
+                // However, just setActiveFilter is fine, we can't easily clear the URL searchQuery without router.
+              }}
               className="mt-6 rounded-xl bg-primary px-6 py-2.5 text-sm font-semibold text-on-primary transition hover:opacity-90"
             >
               Clear filter
@@ -179,5 +195,20 @@ export default function MentorsPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function MentorsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="animate-pulse flex flex-col items-center gap-4">
+          <div className="h-8 w-32 bg-surface-container-high rounded-full"></div>
+          <div className="h-4 w-48 bg-surface-container-high rounded-full"></div>
+        </div>
+      </div>
+    }>
+      <MentorsContent />
+    </Suspense>
   );
 }

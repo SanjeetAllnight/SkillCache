@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
-import { splashData } from "@/lib/mock-data";
+import { splashData } from "@/lib/static-assets";
 
 export default function SplashPage() {
   return (

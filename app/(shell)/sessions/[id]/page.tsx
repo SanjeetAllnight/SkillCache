@@ -1,74 +1,348 @@
 "use client";
 
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tag } from "@/components/ui/tag";
-import { getSessionById, type ApiSession } from "@/lib/firebaseServices";
+import { useAuth } from "@/components/providers/auth-provider";
+import { KnowledgeResourceCard } from "@/components/repository/knowledge-resource-card";
+import { RepositoryEmptyState } from "@/components/repository/repository-empty-state";
+import { ResourceComposer } from "@/components/repository/resource-composer";
+import { SessionRequestModal } from "@/components/sessions/session-request-modal";
+import { SessionStatusBadge } from "@/components/sessions/session-status-badge";
+import {
+  acceptSession,
+  canJoinSession,
+  cancelSession,
+  getSessionTimeLabel,
+  listenSessionById,
+  syncSessionLifecycle,
+  type ApiSession,
+} from "@/lib/firebaseServices";
 import { formatSessionDateParts } from "@/lib/view-models";
+import {
+  deleteKnowledgeResource,
+  getViewerResourceState,
+  listSessionResources,
+  toggleResourceBookmark,
+  toggleResourceLike,
+  trackResourceDownload,
+  type KnowledgeResource,
+  type ResourceViewerState,
+} from "@/lib/repository";
 
-function getStatusLabel(status: ApiSession["status"]) {
-  if (status === "live") {
-    return "Live Now";
-  }
+function getJoinLabel(session: ApiSession, isMentor: boolean, canJoin: boolean) {
+  if (session.status === "completed") return "Session History";
+  if (session.status === "cancelled") return "Request Cancelled";
+  if (session.status === "missed") return "Session Missed";
+  if (session.status === "pending") return isMentor ? "Review Request" : "Awaiting Mentor";
+  if (session.status === "live") return "Join Live Session";
+  if (canJoin) return isMentor ? "Start Session" : "Join Session";
+  return "Join Opens Near Start";
+}
 
-  if (status === "completed") {
-    return "Completed Session";
-  }
+function SessionResourcesPanel({ session }: { session: ApiSession }) {
+  const router = useRouter();
+  const { user } = useAuth();
+  const [resources, setResources] = useState<KnowledgeResource[]>([]);
+  const [interactionState, setInteractionState] = useState<ResourceViewerState>({
+    likedResourceIds: new Set(),
+    bookmarkedResourceIds: new Set(),
+  });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
+  const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
 
-  return "Upcoming Session";
+  const participantIds = [session.mentor?._id, session.learner?._id].filter(Boolean) as string[];
+
+  const loadResources = useCallback(async () => {
+    if (!user?._id) {
+      setResources([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    try {
+      const nextResources = await listSessionResources(session._id, user._id);
+      setResources(nextResources);
+      const nextState = await getViewerResourceState(
+        nextResources.map((resource) => resource.id),
+        user._id,
+      );
+      setInteractionState(nextState);
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load session resources.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [session._id, user?._id]);
+
+  useEffect(() => {
+    void loadResources();
+  }, [loadResources]);
+
+  const updateResourceCount = useCallback((resourceId: string, field: "likesCount" | "bookmarksCount" | "downloadsCount", delta: number) => {
+    setResources((current) =>
+      current.map((resource) =>
+        resource.id === resourceId
+          ? { ...resource, [field]: Math.max(0, resource[field] + delta) }
+          : resource,
+      ),
+    );
+  }, []);
+
+  const handleLike = useCallback(async (resource: KnowledgeResource) => {
+    if (!user?._id) return;
+
+    setPendingResourceId(resource.id);
+    try {
+      const isLiked = await toggleResourceLike(resource.id, user._id);
+      setInteractionState((current) => {
+        const likedResourceIds = new Set(current.likedResourceIds);
+        if (isLiked) likedResourceIds.add(resource.id);
+        else likedResourceIds.delete(resource.id);
+        return { ...current, likedResourceIds };
+      });
+      updateResourceCount(resource.id, "likesCount", isLiked ? 1 : -1);
+    } catch (likeError) {
+      setError(likeError instanceof Error ? likeError.message : "Could not update the like.");
+    } finally {
+      setPendingResourceId(null);
+    }
+  }, [updateResourceCount, user?._id]);
+
+  const handleBookmark = useCallback(async (resource: KnowledgeResource) => {
+    if (!user?._id) return;
+
+    setPendingResourceId(resource.id);
+    try {
+      const isBookmarked = await toggleResourceBookmark(resource.id, user._id);
+      setInteractionState((current) => {
+        const bookmarkedResourceIds = new Set(current.bookmarkedResourceIds);
+        if (isBookmarked) bookmarkedResourceIds.add(resource.id);
+        else bookmarkedResourceIds.delete(resource.id);
+        return { ...current, bookmarkedResourceIds };
+      });
+      updateResourceCount(resource.id, "bookmarksCount", isBookmarked ? 1 : -1);
+    } catch (bookmarkError) {
+      setError(bookmarkError instanceof Error ? bookmarkError.message : "Could not update saved resources.");
+    } finally {
+      setPendingResourceId(null);
+    }
+  }, [updateResourceCount, user?._id]);
+
+  const handleOpen = useCallback(async (resource: KnowledgeResource) => {
+    const target = resource.fileUrl ?? resource.externalUrl;
+    if (!target) {
+      router.push(`/repository/${resource.id}`);
+      return;
+    }
+
+    try {
+      await trackResourceDownload(resource.id);
+      updateResourceCount(resource.id, "downloadsCount", 1);
+    } catch {
+      // Non-blocking.
+    }
+
+    window.open(target, "_blank", "noopener,noreferrer");
+  }, [router, updateResourceCount]);
+
+  const handleDelete = useCallback(async (resource: KnowledgeResource) => {
+    if (!user?._id) return;
+    const confirmed = window.confirm(`Delete "${resource.title}" from this session?`);
+    if (!confirmed) return;
+
+    setPendingResourceId(resource.id);
+    try {
+      await deleteKnowledgeResource(resource, user._id);
+      setResources((current) => current.filter((item) => item.id !== resource.id));
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Could not delete this resource.");
+    } finally {
+      setPendingResourceId(null);
+    }
+  }, [user?._id]);
+
+  const handleSaved = useCallback(() => {
+    setComposerOpen(false);
+    setEditingResource(null);
+    void loadResources();
+  }, [loadResources]);
+
+  return (
+    <section className="app-card-soft">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Session Knowledge</h2>
+          <p className="mt-1 text-sm text-on-surface-variant">
+            Notes, files, links, and takeaways attached to this mentorship exchange.
+          </p>
+        </div>
+        {user ? (
+          <button
+            type="button"
+            onClick={() => {
+              setEditingResource(null);
+              setComposerOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-on-primary transition hover:opacity-90"
+          >
+            <Icon name="add_circle" filled className="text-base" />
+            Attach Resource
+          </button>
+        ) : null}
+      </div>
+
+      {error ? (
+        <p className="mb-5 rounded-lg bg-error/10 px-4 py-3 text-sm font-medium text-error">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {isLoading ? (
+          Array.from({ length: 2 }).map((_, index) => (
+            <Skeleton key={index} className="h-[300px] w-full" />
+          ))
+        ) : resources.length === 0 ? (
+          <RepositoryEmptyState
+            title="No session resources yet"
+            description="Capture the useful parts of this exchange as shared notes, links, snippets, PDFs, or follow-up material."
+            actionLabel={user ? "Attach Resource" : undefined}
+            icon="hub"
+            onAction={user ? () => setComposerOpen(true) : undefined}
+          />
+        ) : (
+          resources.map((resource) => (
+            <KnowledgeResourceCard
+              key={resource.id}
+              resource={resource}
+              liked={interactionState.likedResourceIds.has(resource.id)}
+              bookmarked={interactionState.bookmarkedResourceIds.has(resource.id)}
+              pending={pendingResourceId === resource.id}
+              compact
+              canManage={resource.uploaderId === user?._id}
+              onLike={handleLike}
+              onBookmark={handleBookmark}
+              onOpen={handleOpen}
+              onEdit={(nextResource) => {
+                setEditingResource(nextResource);
+                setComposerOpen(true);
+              }}
+              onDelete={handleDelete}
+            />
+          ))
+        )}
+      </div>
+
+      {composerOpen && user ? (
+        <ResourceComposer
+          open={composerOpen}
+          currentUser={user}
+          initialResource={editingResource}
+          sessionContext={{
+            sessionId: session._id,
+            sessionTitle: session.title,
+            participantIds,
+          }}
+          onClose={() => {
+            setComposerOpen(false);
+            setEditingResource(null);
+          }}
+          onSaved={handleSaved}
+        />
+      ) : null}
+    </section>
+  );
 }
 
 export default function SessionDetailsPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const { user, isAuthReady } = useAuth();
   const [session, setSession] = useState<ApiSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [showReschedule, setShowReschedule] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
+    if (!isAuthReady || !params.id) return;
+    if (!user?._id) {
+      setIsLoading(false);
+      return;
+    }
 
-    async function loadSession() {
-      try {
-        setIsLoading(true);
-        setError(null);
-
-        const response = await getSessionById(params.id);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSession(response);
-      } catch (requestError) {
-        if (!isMounted) {
-          return;
-        }
-
-        setError(
-          requestError instanceof Error
-            ? requestError.message
-            : "Unable to load this session.",
-        );
-      } finally {
-        if (isMounted) {
+    setIsLoading(true);
+    const unsubscribe = listenSessionById(
+      params.id,
+      (nextSession) => {
+        if (!nextSession) {
+          setSession(null);
+          setError("Session not found.");
           setIsLoading(false);
+          return;
         }
-      }
-    }
 
-    if (params.id) {
-      void loadSession();
-    }
+        const isParticipant =
+          nextSession.mentorId === user._id || nextSession.learnerId === user._id;
 
-    return () => {
-      isMounted = false;
-    };
-  }, [params.id]);
+        if (!isParticipant) {
+          setSession(null);
+          setError("Only session participants can view this exchange.");
+          setIsLoading(false);
+          return;
+        }
+
+        setSession(nextSession);
+        setError(null);
+        setIsLoading(false);
+        void syncSessionLifecycle(nextSession);
+      },
+      (listenError) => {
+        setError(listenError.message || "Unable to load this session.");
+        setIsLoading(false);
+      },
+    );
+
+    return () => unsubscribe();
+  }, [isAuthReady, params.id, user?._id]);
+
+  const handleAccept = useCallback(async () => {
+    if (!session) return;
+    setPendingAction("accept");
+    try {
+      await acceptSession(session._id);
+    } catch (acceptError) {
+      setError(acceptError instanceof Error ? acceptError.message : "Unable to accept this session.");
+    } finally {
+      setPendingAction(null);
+    }
+  }, [session]);
+
+  const handleReject = useCallback(async () => {
+    if (!session || !user?._id) return;
+    const confirmed = window.confirm(`Reject "${session.title}"?`);
+    if (!confirmed) return;
+
+    setPendingAction("reject");
+    try {
+      await cancelSession(session._id, user._id, "Request rejected by mentor");
+      router.push("/sessions");
+    } catch (rejectError) {
+      setError(rejectError instanceof Error ? rejectError.message : "Unable to reject this session.");
+    } finally {
+      setPendingAction(null);
+    }
+  }, [router, session, user?._id]);
 
   if (isLoading) {
     return (
@@ -114,6 +388,15 @@ export default function SessionDetailsPage() {
   const learnerGoals = session.learner?.skillsWanted?.length
     ? session.learner.skillsWanted
     : ["Skill growth"];
+  const isMentor = session.mentorId === user?._id;
+  const joinable = canJoinSession(session);
+  const canReviewRequest = isMentor && session.status === "pending";
+  const canReschedule =
+    isMentor && ["pending", "accepted", "upcoming"].includes(session.status);
+  const canOpenCall =
+    session.status === "live" ||
+    (joinable && (session.status === "accepted" || session.status === "upcoming"));
+  const joinLabel = getJoinLabel(session, isMentor, joinable);
 
   return (
     <div className="page-shell page-stack">
@@ -138,25 +421,60 @@ export default function SessionDetailsPage() {
           </div>
 
           <div className="space-y-3 xl:text-right">
-            <div className="flex items-center gap-2 text-tertiary xl:justify-end">
-              <Icon name="fiber_manual_record" filled className="text-sm" />
-              <span className="text-xs font-bold uppercase tracking-widest">
-                {getStatusLabel(session.status)}
+            <div className="flex flex-wrap items-center gap-2 xl:justify-end">
+              <SessionStatusBadge status={session.status} callStatus={session.callStatus} />
+              <span className="rounded-full bg-surface-container px-3 py-1 text-xs font-bold text-on-surface-variant">
+                {getSessionTimeLabel(session)}
               </span>
             </div>
-            <Button
-              href={
-                session.status === "completed"
-                  ? "/sessions"
-                  : `/call/${session._id}`
-              }
-              rounded="xl"
-              size="lg"
-              className="gap-3"
-            >
-              <Icon name={session.status === "completed" ? "history" : "video_call"} />
-              {session.status === "completed" ? "Back to Sessions" : "Start Call"}
-            </Button>
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              {canReviewRequest ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleAccept}
+                    disabled={pendingAction === "accept"}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:opacity-60"
+                  >
+                    <Icon name="check" className="text-base" />
+                    Accept
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleReject}
+                    disabled={pendingAction === "reject"}
+                    className="inline-flex items-center gap-2 rounded-xl bg-error/10 px-5 py-3 text-sm font-bold text-error transition hover:bg-error/15 disabled:opacity-60"
+                  >
+                    <Icon name="close" className="text-base" />
+                    Reject
+                  </button>
+                </>
+              ) : null}
+              {canReschedule ? (
+                <button
+                  type="button"
+                  onClick={() => setShowReschedule(true)}
+                  className="inline-flex items-center gap-2 rounded-xl bg-surface-container px-5 py-3 text-sm font-bold text-on-surface-variant transition hover:bg-surface-container-high"
+                >
+                  <Icon name="edit_calendar" className="text-base" />
+                  Reschedule
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => {
+                  if (session.status === "completed" || session.status === "cancelled" || session.status === "missed") {
+                    return;
+                  }
+                  if (canOpenCall) router.push(`/call/${session._id}`);
+                }}
+                disabled={!canOpenCall}
+                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+              >
+                <Icon name={session.status === "live" ? "login" : "video_call"} className="text-base" />
+                {joinLabel}
+              </button>
+            </div>
           </div>
         </div>
       </section>
@@ -236,42 +554,7 @@ export default function SessionDetailsPage() {
             </div>
           </section>
 
-          <section className="app-card-soft">
-            <div className="mb-8 flex items-center justify-between gap-4">
-              <h2 className="text-xl font-bold tracking-tight">Exchange Notes</h2>
-              <button
-                type="button"
-                className="flex items-center gap-1 text-sm font-bold text-primary"
-              >
-                <Icon name="add_circle" className="text-lg" />
-                Add Note
-              </button>
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-2xl bg-surface-container-lowest p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-stone-400">
-                  Learner
-                </p>
-                <p className="mt-3 text-lg font-semibold text-on-surface">
-                  {session.learner?.name ?? "Unknown Learner"}
-                </p>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  Interested in {learnerGoals.join(", ")}.
-                </p>
-              </div>
-              <div className="rounded-2xl bg-surface-container-lowest p-5">
-                <p className="text-xs font-bold uppercase tracking-widest text-stone-400">
-                  Mentor Offerings
-                </p>
-                <p className="mt-3 text-lg font-semibold text-on-surface">
-                  {mentorSkills[0]}
-                </p>
-                <p className="mt-2 text-sm text-on-surface-variant">
-                  Additional areas: {mentorSkills.slice(1).join(", ") || "Focused one-on-one guidance"}.
-                </p>
-              </div>
-            </div>
-          </section>
+          <SessionResourcesPanel session={session} />
         </div>
 
         <aside className="space-y-8 xl:col-span-4">
@@ -316,6 +599,16 @@ export default function SessionDetailsPage() {
           </section>
         </aside>
       </div>
+
+      {showReschedule && user ? (
+        <SessionRequestModal
+          currentUser={user}
+          mode="reschedule"
+          session={session}
+          onClose={() => setShowReschedule(false)}
+          onSaved={() => setShowReschedule(false)}
+        />
+      ) : null}
     </div>
   );
 }

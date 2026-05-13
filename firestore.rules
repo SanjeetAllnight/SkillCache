@@ -1,0 +1,221 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function sessionPath(sessionId) {
+      return /databases/$(database)/documents/sessions/$(sessionId);
+    }
+
+    function resourcePath(resourceId) {
+      return /databases/$(database)/documents/resources/$(resourceId);
+    }
+
+    function isSessionParticipant(sessionId) {
+      return isAuthenticated()
+        && sessionId is string
+        && exists(sessionPath(sessionId))
+        && (
+          request.auth.uid == get(sessionPath(sessionId)).data.mentorId ||
+          request.auth.uid == get(sessionPath(sessionId)).data.learnerId
+        );
+    }
+
+    function canReadResourceData(data) {
+      return isAuthenticated()
+        && (
+          data.visibility == "public" ||
+          data.uploaderId == request.auth.uid ||
+          (
+            data.visibility == "shared" &&
+            (
+              request.auth.uid in data.sessionParticipantIds ||
+              isSessionParticipant(data.sessionId)
+            )
+          )
+        );
+    }
+
+    function canReadResource(resourceId) {
+      return exists(resourcePath(resourceId))
+        && canReadResourceData(get(resourcePath(resourceId)).data);
+    }
+
+    function validResourceVisibility() {
+      return request.resource.data.visibility in ["public", "private", "shared"];
+    }
+
+    function validResourceCreate() {
+      return isAuthenticated()
+        && request.resource.data.uploaderId == request.auth.uid
+        && validResourceVisibility()
+        && request.resource.data.title is string
+        && request.resource.data.description is string
+        && request.resource.data.type in ["pdf", "markdown", "rich-text", "code", "link", "image", "file"]
+        && request.resource.data.tags is list
+        && request.resource.data.likesCount == 0
+        && request.resource.data.bookmarksCount == 0
+        && request.resource.data.downloadsCount == 0
+        && (
+          !("sessionId" in request.resource.data) ||
+          request.resource.data.sessionId == null ||
+          isSessionParticipant(request.resource.data.sessionId)
+        );
+    }
+
+    function ownerPreservedUpdate() {
+      return isAuthenticated()
+        && resource.data.uploaderId == request.auth.uid
+        && request.resource.data.uploaderId == resource.data.uploaderId;
+    }
+
+    function counterOnlyUpdate() {
+      return isAuthenticated()
+        && canReadResourceData(resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          "likesCount",
+          "bookmarksCount",
+          "downloadsCount",
+          "updatedAt"
+        ])
+        && request.resource.data.likesCount is int
+        && request.resource.data.bookmarksCount is int
+        && request.resource.data.downloadsCount is int
+        && request.resource.data.likesCount >= 0
+        && request.resource.data.bookmarksCount >= 0
+        && request.resource.data.downloadsCount >= 0;
+    }
+
+    // ── User profiles ────────────────────────────────────────────────────────
+    //
+    // Top-level user document: authenticated users can read any profile;
+    // only the account owner can write.
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isUser(userId);
+      allow delete: if false;
+
+      // ── Skills sub-collection ─────────────────────────────────────────────
+      //
+      // Read:   any authenticated user (needed for public profile pages).
+      // Write:  only the owner of the parent user document.
+      // Validate incoming skill documents to prevent bad data.
+      match /skills/{skillId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isUser(userId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 60
+          && request.resource.data.category is string
+          && request.resource.data.type in ["teaching", "learning"]
+          && request.resource.data.level in ["beginner", "intermediate", "advanced", "expert"]
+          && request.resource.data.tags is list
+          && request.resource.data.description is string;
+
+        allow update: if isUser(userId)
+          && request.resource.data.name is string
+          && request.resource.data.name.size() > 0
+          && request.resource.data.name.size() <= 60
+          && request.resource.data.category is string
+          && request.resource.data.type in ["teaching", "learning"]
+          && request.resource.data.level in ["beginner", "intermediate", "advanced", "expert"]
+          && request.resource.data.tags is list
+          && request.resource.data.description is string;
+
+        allow delete: if isUser(userId);
+      }
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.mentorId ||
+        request.auth.uid == resource.data.learnerId
+      );
+
+      allow create: if isAuthenticated() && (
+        request.auth.uid == request.resource.data.mentorId ||
+        request.auth.uid == request.resource.data.learnerId
+      );
+
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.mentorId ||
+        request.auth.uid == resource.data.learnerId
+      );
+
+      allow delete: if false;
+    }
+
+    match /calls/{callId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants ||
+        request.auth.uid == resource.data.initiatorUid
+      );
+
+      allow create: if isAuthenticated() && (
+        request.auth.uid in request.resource.data.participants
+      );
+
+      allow update: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants ||
+        request.auth.uid in request.resource.data.participants
+      );
+
+      allow delete: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants
+      );
+
+      match /candidates/{candidateId} {
+        allow read: if isAuthenticated() && (
+          request.auth.uid in get(/databases/$(database)/documents/calls/$(callId)).data.participants
+        );
+        allow create: if isAuthenticated() && (
+          request.auth.uid == request.resource.data.uid
+        );
+      }
+    }
+
+    match /resources/{resourceId} {
+      allow read: if canReadResourceData(resource.data);
+      allow create: if validResourceCreate();
+      allow update: if ownerPreservedUpdate() || counterOnlyUpdate();
+      allow delete: if isAuthenticated() && resource.data.uploaderId == request.auth.uid;
+    }
+
+    match /resourceLikes/{likeId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && likeId == request.resource.data.resourceId + "_" + request.auth.uid
+        && canReadResource(request.resource.data.resourceId);
+      allow delete: if isAuthenticated()
+        && (
+          resource.data.userId == request.auth.uid ||
+          get(resourcePath(resource.data.resourceId)).data.uploaderId == request.auth.uid
+        );
+      allow update: if false;
+    }
+
+    match /resourceBookmarks/{bookmarkId} {
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow create: if isAuthenticated()
+        && request.resource.data.userId == request.auth.uid
+        && bookmarkId == request.resource.data.resourceId + "_" + request.auth.uid
+        && canReadResource(request.resource.data.resourceId);
+      allow delete: if isAuthenticated()
+        && (
+          resource.data.userId == request.auth.uid ||
+          get(resourcePath(resource.data.resourceId)).data.uploaderId == request.auth.uid
+        );
+      allow update: if false;
+    }
+  }
+}

@@ -1,0 +1,90 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function resourcePath(resourceId) {
+      return /databases/(default)/documents/resources/$(resourceId);
+    }
+
+    function resourceExists(resourceId) {
+      return firestore.exists(resourcePath(resourceId));
+    }
+
+    function resourceData(resourceId) {
+      return firestore.get(resourcePath(resourceId)).data;
+    }
+
+    function isSessionParticipant(resourceId) {
+      return resourceData(resourceId).sessionId is string
+        && firestore.exists(/databases/(default)/documents/sessions/$(resourceData(resourceId).sessionId))
+        && (
+          request.auth.uid == firestore.get(/databases/(default)/documents/sessions/$(resourceData(resourceId).sessionId)).data.mentorId ||
+          request.auth.uid == firestore.get(/databases/(default)/documents/sessions/$(resourceData(resourceId).sessionId)).data.learnerId
+        );
+    }
+
+    function canReadResourceFile(resourceId) {
+      return isAuthenticated()
+        && resourceExists(resourceId)
+        && (
+          resourceData(resourceId).visibility == "public" ||
+          resourceData(resourceId).uploaderId == request.auth.uid ||
+          (
+            resourceData(resourceId).visibility == "shared" &&
+            (
+              request.auth.uid in resourceData(resourceId).sessionParticipantIds ||
+              isSessionParticipant(resourceId)
+            )
+          )
+        );
+    }
+
+    function isAllowedFileType() {
+      return request.resource.contentType.matches("image/.*") ||
+        request.resource.contentType in [
+          "application/pdf",
+          "application/json",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "application/vnd.ms-powerpoint",
+          "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+          "application/vnd.ms-excel",
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          "application/zip",
+          "text/plain",
+          "text/markdown",
+          "text/csv"
+        ];
+    }
+
+    match /repository/{userId}/{resourceType}/{resourceId}/{fileName} {
+      allow read: if canReadResourceFile(resourceId);
+
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == userId
+        && resourceExists(resourceId)
+        && resourceData(resourceId).uploaderId == request.auth.uid
+        && request.resource.size <= 25 * 1024 * 1024
+        && isAllowedFileType();
+
+      allow delete: if isAuthenticated()
+        && request.auth.uid == userId
+        && resourceExists(resourceId)
+        && resourceData(resourceId).uploaderId == request.auth.uid;
+    }
+
+    match /resources/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated()
+        && request.auth.uid == userId
+        && request.resource.size <= 25 * 1024 * 1024
+        && isAllowedFileType();
+      allow delete: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}

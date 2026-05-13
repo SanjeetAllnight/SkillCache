@@ -20,13 +20,6 @@ function formatDisplayTime(date: string) {
   }).format(new Date(date));
 }
 
-// ─── Session avatar index (for session card visual variety) ───────────────────
-// Session cards still use a palette of cover images (not user avatars).
-import { mentorsData } from "@/lib/mock-data";
-const sessionVisuals = mentorsData.mentors;
-function getSessionVisual(index: number) {
-  return sessionVisuals[index % sessionVisuals.length];
-}
 
 // ─── Mentor card mapping ──────────────────────────────────────────────────────
 
@@ -67,8 +60,6 @@ export function toMentorCardData(mentors: BackendUser[]): MentorCardData[] {
 
 export function toDashboardSessionCards(sessions: ApiSession[]): SessionCardData[] {
   return sessions.slice(0, 2).map((session, index) => {
-    const visual = getSessionVisual(index);
-
     return {
       variant: "dashboard",
       id: session._id,
@@ -79,7 +70,7 @@ export function toDashboardSessionCards(sessions: ApiSession[]): SessionCardData
       title: session.title,
       subtitle: `Mentor: ${session.mentor?.name ?? "Unknown Mentor"}`,
       icon: session.status === "live" ? "video_call" : "calendar_today",
-      avatar: visual.image,
+      avatar: "",
       href: `/sessions/${session._id}`,
       tone: session.status === "live" ? "primary" : "default",
     };
@@ -87,16 +78,14 @@ export function toDashboardSessionCards(sessions: ApiSession[]): SessionCardData
 }
 
 export function toFeaturedSessionCard(session: ApiSession): SessionCardData {
-  const visual = getSessionVisual(0);
-
   return {
     variant: "featured",
     id: session._id,
     title: session.title,
     mentor: session.mentor?.name ?? "Unknown Mentor",
-    status: session.status === "live" ? "Live" : "Starting Soon",
+    status: session.status === "live" ? "Live" : session.status === "pending" ? "Pending" : "Starting Soon",
     category: session.mentor?.skillsOffered?.[0] ?? "Mentorship",
-    image: visual.coverImage ?? visual.image,
+    image: "",
     joinHref: `/call/${session._id}`,
     detailHref: `/sessions/${session._id}`,
   };
@@ -104,8 +93,6 @@ export function toFeaturedSessionCard(session: ApiSession): SessionCardData {
 
 export function toUpcomingSessionCards(sessions: ApiSession[]): SessionCardData[] {
   return sessions.map((session, index) => {
-    const visual = getSessionVisual(index);
-
     return {
       variant: "upcoming",
       id: session._id,
@@ -113,7 +100,7 @@ export function toUpcomingSessionCards(sessions: ApiSession[]): SessionCardData[
       mentor: session.mentor?.name ?? "Unknown Mentor",
       date: formatDisplayDate(session.date),
       time: formatDisplayTime(session.date),
-      avatar: visual.image,
+      avatar: "",
       href: `/sessions/${session._id}`,
     };
   });
