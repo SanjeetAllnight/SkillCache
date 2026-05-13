@@ -12,6 +12,8 @@ import { SkillModal } from "@/components/skills/skill-modal";
 import type { SkillFormData } from "@/components/skills/skill-modal";
 import { ToastPortal, pushToast } from "@/components/skills/toast";
 import type { ToastData } from "@/components/skills/toast";
+import { StarBadge } from "@/components/reviews/star-rating";
+import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { useAuth } from "@/components/providers/auth-provider";
 import {
   getUserById,
@@ -21,8 +23,9 @@ import {
   updateSkill,
   deleteSkill,
   migrateSkillsFromLegacy,
+  getMentorRatingMeta,
 } from "@/lib/firebaseServices";
-import type { ApiSkill } from "@/lib/firebaseServices";
+import type { ApiSkill, MentorRatingMeta } from "@/lib/firebaseServices";
 import type { BackendUser } from "@/lib/mockUser";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,6 +81,7 @@ export default function ProfilePage() {
 
   // Profile display
   const [profile, setProfile]     = useState<BackendUser | null>(null);
+  const [ratingMeta, setRatingMeta] = useState<MentorRatingMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -116,9 +120,14 @@ export default function ProfilePage() {
       setIsLoading(true);
       setLoadError(null);
       try {
-        const data = await getUserById(displayUid!);
+        const [data, meta] = await Promise.all([
+          getUserById(displayUid!),
+          getMentorRatingMeta(displayUid!),
+        ]);
         if (!mounted) return;
         setProfile(data);
+        setRatingMeta(meta);
+        
         if (isOwnProfile && data) {
           setEditName(data.name ?? "");
           setEditBio(data.bio ?? "");
@@ -328,11 +337,19 @@ export default function ProfilePage() {
                     </h1>
                     <Icon name="verified" filled className="text-primary" />
                   </div>
-                  <p className="text-sm font-medium text-stone-500">
-                    {offeredSkills.length > 0
-                      ? offeredSkills[0] + " Mentor · Remote"
-                      : "SkillCache Member · Remote"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm font-medium text-stone-500">
+                      {offeredSkills.length > 0
+                        ? offeredSkills[0] + " Mentor · Remote"
+                        : "SkillCache Member · Remote"}
+                    </p>
+                    {ratingMeta && ratingMeta.totalReviews > 0 && (
+                      <>
+                        <span className="text-stone-300">·</span>
+                        <StarBadge rating={ratingMeta.averageRating} totalReviews={ratingMeta.totalReviews} size="sm" />
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 {/* Edit profile / Add Skill buttons — own profile only */}
@@ -674,6 +691,13 @@ export default function ProfilePage() {
               </div>
             </section>
 
+            {/* ── Reviews Section ── */}
+            <ReviewsSection
+              mentor={profile}
+              viewer={user}
+              isOwnProfile={isOwnProfile}
+              initialMeta={ratingMeta ?? undefined}
+            />
           </div>
         </div>
       </div>

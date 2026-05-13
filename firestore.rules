@@ -133,6 +133,29 @@ service cloud.firestore {
 
         allow delete: if isUser(userId);
       }
+
+      // ── Reviews sub-collection ────────────────────────────────────────────
+      //
+      // Read:   any authenticated user (mentor profiles are public).
+      // Create: any authenticated user EXCEPT the mentor themselves.
+      //         Validated: rating 1-5, reviewText 5-300 chars.
+      // Update/Delete: not permitted (immutable reviews).
+      match /reviews/{reviewId} {
+        allow read: if isAuthenticated();
+
+        allow create: if isAuthenticated()
+          && request.auth.uid != userId
+          && request.resource.data.reviewerUid == request.auth.uid
+          && request.resource.data.rating is int
+          && request.resource.data.rating >= 1
+          && request.resource.data.rating <= 5
+          && request.resource.data.reviewText is string
+          && request.resource.data.reviewText.size() >= 5
+          && request.resource.data.reviewText.size() <= 300
+          && request.resource.data.reviewerName is string;
+
+        allow update, delete: if false;
+      }
     }
 
     match /sessions/{sessionId} {

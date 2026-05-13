@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { KnowledgeResourceCard } from "@/components/repository/knowledge-resource-card";
 import { RepositoryEmptyState } from "@/components/repository/repository-empty-state";
@@ -94,6 +94,7 @@ function emptyStateFor(view: RepositoryView, hasFilters: boolean) {
 
 export default function RepositoryPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthReady } = useAuth();
 
   const [view, setView] = useState<RepositoryView>("community");
@@ -110,11 +111,32 @@ export default function RepositoryPage() {
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
   const [composerOpen, setComposerOpen] = useState(false);
   const [editingResource, setEditingResource] = useState<KnowledgeResource | null>(null);
-  const [search, setSearch] = useState("");
+  // Initialise search from the URL ?q param (written by the navbar search bar)
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<ResourceType | "all">("all");
   const [sort, setSort] = useState<SortKey>("latest");
   const [toasts, setToasts] = useState<ToastData[]>([]);
+
+  // Keep local search in sync when the navbar updates ?q
+  useEffect(() => {
+    setSearch(searchParams.get("q") ?? "");
+  }, [searchParams]);
+
+  /** Write the search term back into the URL so the navbar input stays in sync. */
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearch(value);
+      const params = new URLSearchParams(searchParams.toString());
+      if (value.trim()) {
+        params.set("q", value);
+      } else {
+        params.delete("q");
+      }
+      router.replace(`/repository?${params.toString()}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
 
   const refreshInteractions = useCallback(async (items: KnowledgeResource[]) => {
     const state = await getViewerResourceState(
@@ -341,7 +363,12 @@ export default function RepositoryPage() {
     setSearch("");
     setActiveTag(null);
     setActiveType("all");
-  }, []);
+    // Remove ?q from URL so the navbar clears too
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("q");
+    const qs = params.toString();
+    router.replace(qs ? `/repository?${qs}` : "/repository", { scroll: false });
+  }, [router, searchParams]);
 
   return (
     <div className="page-shell page-stack">
@@ -416,14 +443,14 @@ export default function RepositoryPage() {
             <Icon name="search" className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400" />
             <input
               value={search}
-              onChange={(event) => setSearch(event.target.value)}
+              onChange={(event) => handleSearchChange(event.target.value)}
               placeholder="Search by topic, skill, contributor, or content"
               className="w-full rounded-lg border border-outline-variant/30 bg-surface px-12 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
             />
             {search ? (
               <button
                 type="button"
-                onClick={() => setSearch("")}
+                onClick={() => handleSearchChange("")}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 transition hover:text-on-surface"
               >
                 <Icon name="close" className="text-base" />

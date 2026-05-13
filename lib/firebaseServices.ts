@@ -917,3 +917,173 @@ export async function migrateSkillsFromLegacy(uid: string): Promise<boolean> {
   // No need to re-sync arrays here — the legacy arrays already contain the same strings
   return true;
 }
+
+// ─── Review / Rating system ──────────────────────────────────────────────────
+
+export type FirestoreReview = {
+  reviewerUid: string;
+  reviewerName: string;
+  rating: number;          // 1–5
+  reviewText: string;
+  sessionId?: string | null;
+  createdAt?: unknown;
+};
+
+export type ApiReview = FirestoreReview & {
+  _id: string;
+  createdAtMillis: number;
+};
+
+export type MentorRatingMeta = {
+  averageRating: number;
+  totalReviews: number;
+};
+
+function reviewsColRef(mentorUid: string) {
+  return collection(db, "users", mentorUid, "reviews");
+}
+
+function toMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  return 0;
+}
+
+function normalizeReview(id: string, data: Partial<FirestoreReview> & Record<string, unknown>): ApiReview {
+  return {
+    _id: id,
+    reviewerUid: String(data.reviewerUid ?? ""),
+    reviewerName: String(data.reviewerName ?? "Anonymous"),
+    rating: Number(data.rating ?? 0),
+    reviewText: String(data.reviewText ?? ""),
+    sessionId: typeof data.sessionId === "string" ? data.sessionId : null,
+    createdAt: data.createdAt,
+    createdAtMillis: toMillis(data.createdAt),
+  };
+}
+
+/**
+ * Check whether the given user has already submitted a review for this mentor.
+ */
+export async function hasUserReviewedMentor(
+  mentorUid: string,
+  reviewerUid: string,
+): Promise<boolean> {
+  const snap = await getDocs(
+    query(reviewsColRef(mentorUid), where("reviewerUid", "==", reviewerUid)),
+  );
+  return !snap.empty;
+}
+
+/**
+ * Submit a new review for a mentor.
+ * - Prevents self-review (throws)
+ * - Prevents duplicate reviews (throws)
+ * - Atomically updates averageRating and totalReviews on the mentor document
+ */
+export async function submitReview(
+  mentorUid: string,
+  reviewer: { uid: string; name: string },
+  input: { rating: number; reviewText: string; sessionId?: string | null },
+): Promise<ApiReview> {
+  if (mentorUid === reviewer.uid) {
+    throw new Error("You cannot review yourself.");
+  }
+  if (input.rating < 1 || input.rating > 5) {
+    throw new Error("Please select a star rating before submitting.");
+  }
+  if (!input.reviewText.trim() || input.reviewText.trim().length < 5) {
+    throw new Error("Please write at least 5 characters in your review.");
+  }
+  if (input.reviewText.length > 300) {
+    throw new Error("Reviews must be 300 characters or fewer.");
+  }
+
+  // Duplicate guard
+  const alreadyReviewed = await hasUserReviewedMentor(mentorUid, reviewer.uid);
+  if (alreadyReviewed) {
+    throw new Error("You've already reviewed this mentor.");
+  }
+
+  // Write the review document
+  const colRef = reviewsColRef(mentorUid);
+  const docRef = await addDoc(colRef, {
+    reviewerUid: reviewer.uid,
+    reviewerName: reviewer.name,
+    rating: input.rating,
+    reviewText: input.reviewText.trim(),
+    sessionId: input.sessionId ?? null,
+    createdAt: serverTimestamp(),
+  } satisfies Omit<FirestoreReview, "_id">);
+
+  // Atomically recalculate average on the mentor user doc
+  const mentorRef = doc(db, "users", mentorUid);
+  const mentorSnap = await getDoc(mentorRef);
+  const mentorData = mentorSnap.data() ?? {};
+  const prevTotal: number = Number(mentorData.totalReviews ?? 0);
+  const prevAvg: number = Number(mentorData.averageRating ?? 0);
+  const newTotal = prevTotal + 1;
+  const newAvg = parseFloat(((prevAvg * prevTotal + input.rating) / newTotal).toFixed(2));
+
+  await updateDoc(mentorRef, {
+    averageRating: newAvg,
+    totalReviews: newTotal,
+  });
+
+  return {
+    _id: docRef.id,
+    reviewerUid: reviewer.uid,
+    reviewerName: reviewer.name,
+    rating: input.rating,
+    reviewText: input.reviewText.trim(),
+    sessionId: input.sessionId ?? null,
+    createdAt: null,
+    createdAtMillis: Date.now(),
+  };
+}
+
+/**
+ * Fetch all reviews for a mentor (one-time read, sorted newest-first).
+ */
+export async function getReviewsForMentor(mentorUid: string): Promise<ApiReview[]> {
+  const snap = await getDocs(reviewsColRef(mentorUid));
+  return snap.docs
+    .map((d) => normalizeReview(d.id, d.data()))
+    .sort((a, b) => b.createdAtMillis - a.createdAtMillis);
+}
+
+/**
+ * Real-time listener for a mentor's reviews.
+ */
+export function listenReviewsForMentor(
+  mentorUid: string,
+  onChange: (reviews: ApiReview[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return onSnapshot(
+    reviewsColRef(mentorUid),
+    (snap) => {
+      const reviews = snap.docs
+        .map((d) => normalizeReview(d.id, d.data()))
+        .sort((a, b) => b.createdAtMillis - a.createdAtMillis);
+      onChange(reviews);
+    },
+    (err) => onError?.(err),
+  );
+}
+
+/**
+ * Read averageRating + totalReviews from a mentor's user document.
+ */
+export async function getMentorRatingMeta(mentorUid: string): Promise<MentorRatingMeta> {
+  const snap = await getDoc(doc(db, "users", mentorUid));
+  if (!snap.exists()) return { averageRating: 0, totalReviews: 0 };
+  const data = snap.data();
+  return {
+    averageRating: Number(data.averageRating ?? 0),
+    totalReviews: Number(data.totalReviews ?? 0),
+  };
+}
