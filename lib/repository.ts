@@ -346,10 +346,124 @@ function buildStoragePath(input: CreateResourceInput, resourceId: string, type: 
   return `repository/${input.uploaderId}/${type}/${resourceId}/${timestamp}-${sanitizeFileName(file.name)}`;
 }
 
+/** Build an optimistic KnowledgeResource for instant UI insertion before Firestore confirms. */
+export function buildOptimisticResource(
+  input: CreateResourceInput,
+  id: string,
+  fileUrl?: string,
+): KnowledgeResource {
+  const tags = normalizeTags(input.tags);
+  const type = input.file ? inferResourceTypeFromFile(input.file) : input.type;
+  const nowMillis = Date.now();
+  return {
+    id,
+    title: input.title.trim(),
+    titleLower: input.title.trim().toLowerCase(),
+    description: input.description.trim(),
+    type,
+    uploaderId: input.uploaderId,
+    uploaderName: input.uploaderName,
+    uploaderAvatar: input.uploaderAvatar,
+    tags,
+    tagSlugs: tags.map(tagSlug),
+    sessionId: input.sessionId ?? null,
+    sessionParticipantIds: input.sessionParticipantIds ?? [],
+    externalUrl: input.type === "link" ? input.externalUrl?.trim() : undefined,
+    content: input.content?.trim() || undefined,
+    contentFormat: getContentFormat(type),
+    codeLanguage: input.type === "code" ? input.codeLanguage?.trim() || "Text" : undefined,
+    fileName: input.file?.name,
+    fileSize: input.file?.size,
+    contentType: input.file?.type,
+    storagePath: undefined,
+    fileUrl,
+    likesCount: 0,
+    bookmarksCount: 0,
+    downloadsCount: 0,
+    visibility: input.visibility,
+    uploadStatus: "ready",
+    ai: { summary: null, suggestedTags: [], category: null, embeddingStatus: "not_started" },
+    searchText: buildSearchText({
+      title: input.title,
+      description: input.description,
+      tags,
+      uploaderName: input.uploaderName,
+      type,
+      content: input.content,
+      externalUrl: input.externalUrl,
+    }),
+    createdAt: nowMillis,
+    updatedAt: nowMillis,
+    createdAtMillis: nowMillis,
+    updatedAtMillis: nowMillis,
+  };
+}
+
+/** Upload a file to Storage with timeout + retry. Returns the download URL. */
+async function uploadFileWithRetry(
+  storagePath: string,
+  file: File,
+  metadata: Record<string, string>,
+  onUploadProgress?: (progress: number) => void,
+  maxRetries = 3,
+  timeoutMs = 30_000,
+): Promise<string> {
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const uploadTask = uploadBytesResumable(ref(storage, storagePath), file, {
+        contentType: file.type || "application/octet-stream",
+        customMetadata: metadata,
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        // Abort signal → cancel the task
+        controller.signal.addEventListener("abort", () => {
+          uploadTask.cancel();
+          reject(new Error("Upload timed out. Please check your connection and try again."));
+        });
+
+        uploadTask.on(
+          "state_changed",
+          (snapshot) => {
+            const progress = Math.round(
+              (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
+            );
+            onUploadProgress?.(progress);
+          },
+          reject,
+          () => resolve(),
+        );
+      });
+
+      clearTimeout(timer);
+      return await getDownloadURL(uploadTask.snapshot.ref);
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err;
+      // Don't retry on auth/permission errors
+      const code = (err as { code?: string }).code ?? "";
+      if (code.startsWith("storage/unauthorized") || code === "storage/unauthenticated") {
+        throw err;
+      }
+      // Exponential back-off before retry
+      if (attempt < maxRetries - 1) {
+        await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 export async function createKnowledgeResource(
   input: CreateResourceInput,
   onUploadProgress?: (progress: number) => void,
-) {
+): Promise<KnowledgeResource> {
   validateCreateInput(input);
 
   const inferredType = input.file ? inferResourceTypeFromFile(input.file) : input.type;
@@ -377,7 +491,7 @@ export async function createKnowledgeResource(
     codeLanguage: input.type === "code" ? input.codeLanguage?.trim() || "Text" : undefined,
     fileName: input.file?.name,
     fileSize: input.file?.size,
-    contentType: input.file?.type,
+    contentType: input.file?.type || (input.file ? "application/octet-stream" : undefined),
     storagePath,
     likesCount: 0,
     bookmarksCount: 0,
@@ -406,41 +520,31 @@ export async function createKnowledgeResource(
   await setDoc(resourceRef, withoutUndefined(baseDocument));
 
   if (!input.file || !storagePath) {
-    return resourceRef.id;
+    // Non-file resource (link, note, code) — return immediately
+    return buildOptimisticResource(input, resourceRef.id);
   }
 
   try {
-    const uploadTask = uploadBytesResumable(ref(storage, storagePath), input.file, {
-      contentType: input.file.type || undefined,
-      customMetadata: {
+    const fileUrl = await uploadFileWithRetry(
+      storagePath,
+      input.file,
+      {
         uploaderId: input.uploaderId,
         resourceId: resourceRef.id,
         resourceType: type,
         visibility: input.visibility,
         sessionId: input.sessionId ?? "",
       },
-    });
+      onUploadProgress,
+    );
 
-    await new Promise<void>((resolve, reject) => {
-      uploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
-          onUploadProgress?.(progress);
-        },
-        reject,
-        () => resolve(),
-      );
-    });
-
-    const fileUrl = await getDownloadURL(uploadTask.snapshot.ref);
     await updateDoc(resourceRef, {
       fileUrl,
       uploadStatus: "ready",
       updatedAt: serverTimestamp(),
     });
 
-    return resourceRef.id;
+    return buildOptimisticResource(input, resourceRef.id, fileUrl);
   } catch (error) {
     await updateDoc(resourceRef, {
       uploadStatus: "failed",
@@ -506,6 +610,8 @@ export async function listRepositoryResources(options: {
   const pageSize = options.pageSize ?? 18;
   const constraints: QueryConstraint[] = [];
 
+  // NOTE: We intentionally omit orderBy here to avoid requiring a composite
+  // Firestore index (visibility + createdAt). Sorting is done client-side.
   if (options.scope === "community") {
     constraints.push(where("visibility", "==", "public"));
   } else {
@@ -513,12 +619,19 @@ export async function listRepositoryResources(options: {
     constraints.push(where("uploaderId", "==", options.userId));
   }
 
-  constraints.push(orderBy("createdAt", "desc"));
   if (options.cursor) constraints.push(startAfter(options.cursor));
   constraints.push(limitQuery(pageSize + 1));
 
   const snap = await getDocs(query(resourcesCollection, ...constraints));
-  const docs = snap.docs.slice(0, pageSize);
+
+  // Sort client-side by createdAt descending
+  const sorted = snap.docs.sort((a, b) => {
+    const aMillis = toMillis(a.data().createdAt);
+    const bMillis = toMillis(b.data().createdAt);
+    return bMillis - aMillis;
+  });
+
+  const docs = sorted.slice(0, pageSize);
 
   return {
     resources: docs.map((item) => normalizeResource(item.id, item.data())),
@@ -530,8 +643,9 @@ export async function listRepositoryResources(options: {
 export async function listSavedResources(userId: string): Promise<KnowledgeResource[]> {
   if (!userId) return [];
 
+  // Omit orderBy to avoid composite index requirement; sort client-side below.
   const bookmarksSnap = await getDocs(
-    query(bookmarksCollection, where("userId", "==", userId), orderBy("createdAt", "desc")),
+    query(bookmarksCollection, where("userId", "==", userId)),
   );
 
   const resources = await Promise.all(

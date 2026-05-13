@@ -45,11 +45,14 @@ service firebase.storage {
     }
 
     function isAllowedFileType() {
-      return request.resource.contentType.matches("image/.*") ||
-        request.resource.contentType in [
+      // Fallback: some browsers omit content-type for plain-text / markdown uploads
+      return request.resource.contentType == ""
+        || request.resource.contentType.matches("image/.*")
+        || request.resource.contentType in [
           "application/pdf",
           "application/json",
           "application/msword",
+          "application/octet-stream",
           "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "application/vnd.ms-powerpoint",
           "application/vnd.openxmlformats-officedocument.presentationml.presentation",

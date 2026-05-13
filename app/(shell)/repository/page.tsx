@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { KnowledgeResourceCard } from "@/components/repository/knowledge-resource-card";
 import { RepositoryEmptyState } from "@/components/repository/repository-empty-state";
 import { ResourceComposer } from "@/components/repository/resource-composer";
+import { ToastPortal, pushToast } from "@/components/skills/toast";
+import type { ToastData } from "@/components/skills/toast";
 import { useAuth } from "@/components/providers/auth-provider";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -112,6 +114,7 @@ export default function RepositoryPage() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
   const [activeType, setActiveType] = useState<ResourceType | "all">("all");
   const [sort, setSort] = useState<SortKey>("latest");
+  const [toasts, setToasts] = useState<ToastData[]>([]);
 
   const refreshInteractions = useCallback(async (items: KnowledgeResource[]) => {
     const state = await getViewerResourceState(
@@ -225,9 +228,20 @@ export default function RepositoryPage() {
     setComposerOpen(true);
   }, []);
 
-  const handleSaved = useCallback(() => {
+  const handleSaved = useCallback((resource?: KnowledgeResource) => {
     setComposerOpen(false);
     setEditingResource(null);
+
+    if (resource) {
+      // Optimistically prepend the new card — no wait for network reload
+      setResources((prev) => {
+        const exists = prev.some((r) => r.id === resource.id);
+        return exists ? prev : [resource, ...prev];
+      });
+      setToasts((prev) => pushToast(prev, `"${resource.title}" shared successfully.`));
+    }
+
+    // Background reload to hydrate server timestamps
     void loadResources(view);
   }, [loadResources, view]);
 
@@ -553,6 +567,11 @@ export default function RepositoryPage() {
           onSaved={handleSaved}
         />
       ) : null}
+
+      <ToastPortal
+        toasts={toasts}
+        onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
+      />
     </div>
   );
 }

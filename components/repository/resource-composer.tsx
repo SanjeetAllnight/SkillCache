@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import {
@@ -27,7 +27,7 @@ type ResourceComposerProps = {
   initialResource?: KnowledgeResource | null;
   sessionContext?: SessionResourceContext;
   onClose: () => void;
-  onSaved: (resourceId?: string) => void;
+  onSaved: (resource?: KnowledgeResource) => void;
 };
 
 const typeOptions: Array<{
@@ -87,7 +87,9 @@ export function ResourceComposer({
   const [file, setFile] = useState<File | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [slowUpload, setSlowUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const slowUploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -103,7 +105,9 @@ export function ResourceComposer({
     setFile(null);
     setUploadProgress(0);
     setSaving(false);
+    setSlowUpload(false);
     setError(null);
+    if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
   }, [open, initialResource, sessionContext]);
 
   const selectedType = useMemo(
@@ -136,29 +140,24 @@ export function ResourceComposer({
 
   const handleSubmit = useCallback(async () => {
     setSaving(true);
+    setSlowUpload(false);
     setError(null);
+
+    // Show a hint if the upload takes > 20 seconds
+    slowUploadTimerRef.current = setTimeout(() => setSlowUpload(true), 20_000);
 
     try {
       if (isEditing && initialResource) {
         await updateKnowledgeResource(
           initialResource.id,
-          {
-            title,
-            description,
-            type,
-            tags: parseTags(tags),
-            visibility,
-            externalUrl,
-            content,
-            codeLanguage,
-          },
+          { title, description, type, tags: parseTags(tags), visibility, externalUrl, content, codeLanguage },
           currentUser._id,
         );
-        onSaved(initialResource.id);
+        onSaved(initialResource);
         return;
       }
 
-      const resourceId = await createKnowledgeResource(
+      const resource = await createKnowledgeResource(
         {
           title,
           description,
@@ -178,30 +177,21 @@ export function ResourceComposer({
         setUploadProgress,
       );
 
-      onSaved(resourceId);
+      onSaved(resource);
     } catch (submitError) {
       setError(
         submitError instanceof Error
           ? submitError.message
           : "We could not save this resource right now.",
       );
+    } finally {
       setSaving(false);
+      setSlowUpload(false);
+      if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
     }
   }, [
-    isEditing,
-    initialResource,
-    title,
-    description,
-    type,
-    tags,
-    visibility,
-    externalUrl,
-    content,
-    codeLanguage,
-    currentUser,
-    file,
-    sessionContext,
-    onSaved,
+    isEditing, initialResource, title, description, type, tags, visibility,
+    externalUrl, content, codeLanguage, currentUser, file, sessionContext, onSaved,
   ]);
 
   if (!open) return null;
@@ -471,6 +461,12 @@ export function ResourceComposer({
             {error ? (
               <p className="rounded-lg bg-error/10 px-4 py-3 text-sm font-medium text-error">
                 {error}
+              </p>
+            ) : null}
+
+            {slowUpload && saving ? (
+              <p className="rounded-lg bg-primary/5 px-4 py-3 text-sm text-on-surface-variant">
+                <span className="font-semibold text-primary">Still uploading…</span> Large files can take a moment. Please stay on this page.
               </p>
             ) : null}
 
