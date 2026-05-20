@@ -94,16 +94,16 @@ export function Navbar() {
               onClick={logout}
               className="hidden border-outline-variant/60 bg-surface-container-low md:inline-flex"
             >
-              Logout
-              <Icon name="logout" className="text-base" />
+              {process.env.NODE_ENV === "development" ? "Switch Account" : "Logout"}
+              <Icon name={process.env.NODE_ENV === "development" ? "swap_horiz" : "logout"} className="text-base" />
             </Button>
             <button
               type="button"
               onClick={logout}
               className="rounded-full bg-surface-container-low p-2 text-stone-500 transition-colors hover:bg-surface-container-high md:hidden"
-              aria-label="Logout"
+              aria-label={process.env.NODE_ENV === "development" ? "Switch Account" : "Logout"}
             >
-              <Icon name="logout" />
+              <Icon name={process.env.NODE_ENV === "development" ? "swap_horiz" : "logout"} />
             </button>
             <Link
               href="/profile"

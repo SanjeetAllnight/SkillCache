@@ -29,7 +29,13 @@ export type FirestoreUser = {
   rating: number;
   sessionsCompleted: number;
   createdAt?: FieldValue;
+  lastLoginAt?: FieldValue;
   profileComplete?: boolean;
+  /**
+   * false  = brand-new account, has never finished onboarding.
+   * true   = returning user who completed /complete-profile at least once.
+   */
+  firstLoginCompleted?: boolean;
 };
 
 /** Real-time call lifecycle state stored on the session document. */
@@ -212,10 +218,32 @@ export async function createUserProfile(
       rating: 0,
       sessionsCompleted: 0,
       profileComplete: false,
+      firstLoginCompleted: false,
       createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
     },
     { merge: true }
   );
+}
+
+/**
+ * Called when an existing user logs back in.
+ * Stamps lastLoginAt without touching any other field.
+ */
+export async function updateLastLoginAt(uid: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "users", uid), { lastLoginAt: serverTimestamp() });
+  } catch {
+    // Non-fatal — don't block the login flow if this fails
+  }
+}
+
+/**
+ * Called by /complete-profile after the user saves their onboarding data.
+ * Marks the account as a returning user so the dashboard shows "Welcome back".
+ */
+export async function markFirstLoginCompleted(uid: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid), { firstLoginCompleted: true });
 }
 
 /**

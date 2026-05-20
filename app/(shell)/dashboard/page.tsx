@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -9,46 +8,53 @@ import { SessionCard } from "@/components/cards/session-card";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getSessions, getMentors, type ApiSession } from "@/lib/firebaseServices";
-import { type BackendUser } from "@/lib/mockUser";
+import {
+  getSessionsForUser,
+  type ApiSession,
+} from "@/lib/firebaseServices";
 import { toDashboardSessionCards } from "@/lib/view-models";
 
+// ─── Stat card colour tokens ────────────────────────────────────────────────
 const statIconTone: Record<string, string> = {
   primary: "bg-primary/10 text-primary",
   secondary: "bg-secondary-container text-on-secondary-container",
   tertiary: "bg-tertiary-container text-on-tertiary-container",
 };
 
+// ─── Page ───────────────────────────────────────────────────────────────────
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user, isAuthReady } = useAuth();
+
   const [sessions, setSessions] = useState<ApiSession[]>([]);
-  const [mentorsList, setMentorsList] = useState<BackendUser[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState(true);
 
+  // ── Reset + reload whenever the signed-in user changes ──────────────────
+  // This prevents stale data from a previous account flashing on screen
+  // when switching between test accounts.
   useEffect(() => {
+    // If auth hasn't resolved yet, keep the loading skeleton showing.
+    if (!isAuthReady || !user?._id) {
+      setSessions([]);
+      setIsLoadingSessions(true);
+      return;
+    }
+
     let isMounted = true;
+    // Reset immediately so switching accounts never shows old numbers.
+    setSessions([]);
+    setIsLoadingSessions(true);
 
     async function loadSessions() {
+      if (!user?._id) return;
       try {
-        const [response, mentorsData] = await Promise.all([
-          getSessions(),
-          getMentors(undefined, user?._id)
-        ]);
-
-        if (!isMounted) {
-          return;
-        }
-
-        setSessions(response);
-        setMentorsList(mentorsData);
+        // getSessionsForUser only returns sessions where this uid is
+        // mentor OR learner — no cross-user data contamination.
+        const data = await getSessionsForUser(user._id);
+        if (isMounted) setSessions(data);
       } catch {
-        if (isMounted) {
-          setSessions([]);
-        }
+        if (isMounted) setSessions([]);
       } finally {
-        if (isMounted) {
-          setIsLoadingSessions(false);
-        }
+        if (isMounted) setIsLoadingSessions(false);
       }
     }
 
@@ -57,35 +63,44 @@ export default function DashboardPage() {
     return () => {
       isMounted = false;
     };
-  }, []);
+  // Re-run whenever the signed-in user identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id, isAuthReady]);
 
+  // ── Derived values ────────────────────────────────────────────────────────
   const activeSessions = sessions.filter(
-    (session) =>
-      session.status === "live" ||
-      session.status === "accepted" ||
-      session.status === "upcoming",
+    (s) =>
+      s.status === "live" ||
+      s.status === "accepted" ||
+      s.status === "upcoming",
   );
   const dashboardSessions = toDashboardSessionCards(activeSessions);
+
+  const totalSessions    = sessions.length;
+  const completedSessions = sessions.filter((s) => s.status === "completed").length;
+  const upcomingCount    = sessions.filter(
+    (s) => s.status === "accepted" || s.status === "upcoming",
+  ).length;
 
   const stats = [
     {
       label: "Total Sessions",
-      value: sessions.length.toString().padStart(2, '0'),
+      value: totalSessions.toString().padStart(2, "0"),
       change: "lifetime",
       icon: "calendar_today",
       tone: "primary",
     },
     {
       label: "Skills Exchanged",
-      value: (user?.skillsOffered?.length ?? 0).toString().padStart(2, '0'),
+      value: (user?.skillsOffered?.length ?? 0).toString().padStart(2, "0"),
       change: "active arsenal",
       icon: "auto_awesome",
       tone: "secondary",
     },
     {
-      label: "Focus Hours",
-      value: sessions.filter((s) => s.status === "completed").length.toString().padStart(2, '0'),
-      change: "completed",
+      label: "Completed",
+      value: completedSessions.toString().padStart(2, "0"),
+      change: "sessions done",
       icon: "schedule",
       tone: "tertiary",
     },
@@ -93,20 +108,51 @@ export default function DashboardPage() {
 
   const quickActions = [
     { icon: "person_search", label: "Find Mentor", href: "/mentors" },
-    { icon: "add_box", label: "Add Skill", href: "/profile" },
+    { icon: "add_box",       label: "Add Skill",   href: "/profile"  },
   ];
+
+  // ── Greeting ──────────────────────────────────────────────────────────────
+  // firstLoginCompleted is set to true only after the user finishes
+  // onboarding (/complete-profile). Until then they are a "new" user.
+  const isReturningUser = user?.firstLoginCompleted === true;
+  const greetingPrefix  = isReturningUser ? "Welcome back, " : "Welcome, ";
+
+  // ── Full loading state (auth not ready yet) ───────────────────────────────
+  if (!isAuthReady) {
+    return (
+      <div className="page-shell page-stack">
+        <section className="section-stack max-w-3xl">
+          <Skeleton className="h-12 w-80" />
+          <Skeleton className="h-5 w-64" />
+        </section>
+        <div className="grid gap-6 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-32 w-full" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-shell page-stack">
+      {/* ── Hero greeting ─────────────────────────────────────────────── */}
       <section className="section-stack max-w-3xl">
         <h1 className="font-headline text-4xl font-extrabold tracking-tighter text-on-surface md:text-5xl">
-          Welcome back, <span className="text-primary">{user?.name}</span>.
+          {greetingPrefix}
+          <span className="text-primary">{user?.name}</span>.
         </h1>
         <p className="max-w-xl text-lg text-on-surface-variant">
-          Your creative laboratory is ready. You have {sessions.filter((s) => s.status === "accepted" || s.status === "upcoming").length} upcoming sessions.
+          Your creative laboratory is ready.{" "}
+          {isLoadingSessions ? (
+            <Skeleton className="inline-block h-5 w-24 align-middle" />
+          ) : (
+            <>You have {upcomingCount} upcoming session{upcomingCount !== 1 ? "s" : ""}.</>
+          )}
         </p>
       </section>
 
+      {/* ── Stat cards ────────────────────────────────────────────────── */}
       <section className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
         {stats.map((stat) => (
           <article key={stat.label} className="app-card">
@@ -114,13 +160,29 @@ export default function DashboardPage() {
               <span className="text-xs font-bold uppercase tracking-widest text-stone-400">
                 {stat.label}
               </span>
-              <div className={`flex h-10 w-10 items-center justify-center rounded-full ${statIconTone[stat.tone]}`}>
+              <div
+                className={`flex h-10 w-10 items-center justify-center rounded-full ${statIconTone[stat.tone]}`}
+              >
                 <Icon name={stat.icon} />
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <span className="font-headline text-4xl font-black">{stat.value}</span>
-              <span className={stat.tone === "tertiary" ? "text-sm font-bold text-tertiary" : stat.tone === "primary" ? "text-sm font-bold text-primary" : "text-sm font-bold text-stone-500"}>
+              {isLoadingSessions ? (
+                <Skeleton className="h-10 w-14" />
+              ) : (
+                <span className="font-headline text-4xl font-black">
+                  {stat.value}
+                </span>
+              )}
+              <span
+                className={
+                  stat.tone === "tertiary"
+                    ? "text-sm font-bold text-tertiary"
+                    : stat.tone === "primary"
+                      ? "text-sm font-bold text-primary"
+                      : "text-sm font-bold text-stone-500"
+                }
+              >
                 {stat.change}
               </span>
             </div>
@@ -128,12 +190,17 @@ export default function DashboardPage() {
         ))}
       </section>
 
+      {/* ── Main content grid ─────────────────────────────────────────── */}
       <div className="grid gap-10 xl:grid-cols-12">
+        {/* Skills atelier */}
         <div className="min-w-0 space-y-12 xl:col-span-8">
           <section className="section-stack">
             <div className="flex items-end justify-between">
               <h2 className="font-headline text-3xl font-bold">Skills Atelier</h2>
-              <button type="button" className="text-sm font-bold text-primary hover:underline">
+              <button
+                type="button"
+                className="text-sm font-bold text-primary hover:underline"
+              >
                 Manage All
               </button>
             </div>
@@ -155,7 +222,9 @@ export default function DashboardPage() {
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm text-stone-500">No skills offered yet.</span>
+                    <span className="text-sm text-stone-500">
+                      No skills offered yet.
+                    </span>
                   )}
                   <Link
                     href="/profile"
@@ -182,7 +251,9 @@ export default function DashboardPage() {
                       </span>
                     ))
                   ) : (
-                    <span className="text-sm text-stone-500">No skills wanted yet.</span>
+                    <span className="text-sm text-stone-500">
+                      No skills wanted yet.
+                    </span>
                   )}
                   <Link
                     href="/profile"
@@ -194,45 +265,9 @@ export default function DashboardPage() {
               </div>
             </div>
           </section>
-
-          {mentorsList.length > 0 && (
-            <section className="relative overflow-hidden rounded-2xl bg-surface-container p-1">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(50,105,67,0.12),_transparent_55%)]" />
-              <div className="relative flex flex-col items-center gap-8 rounded-2xl bg-surface-container-lowest p-6 md:flex-row md:gap-10 md:p-8">
-                <div className="flex-1 space-y-4">
-                  <span className="inline-flex rounded-full bg-secondary-container px-3 py-1 text-[10px] font-black uppercase tracking-tight text-on-secondary-container">
-                    Perfect Match
-                  </span>
-                  <h2 className="font-headline text-4xl font-extrabold leading-tight">
-                    {mentorsList[0].skillsOffered?.[0] || 'Mentorship'} with {mentorsList[0].name.split(" ")[0]}.
-                  </h2>
-                  <p className="text-lg text-on-surface-variant">
-                    {mentorsList[0].name} wants to learn what you offer, and can teach you {mentorsList[0].skillsOffered?.[0]}.
-                  </p>
-                  <div className="flex flex-wrap gap-4 pt-4">
-                    <Button href="/sessions">Initiate Exchange</Button>
-                    <Button href={`/profile?mentor=${mentorsList[0]._id}`} variant="outline">
-                      View Portfolio
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="relative h-64 w-64 shrink-0">
-                  <div className="absolute left-0 top-6 z-10 flex h-40 w-40 rotate-[-6deg] items-center justify-center overflow-hidden rounded-2xl border-4 border-surface bg-primary-container font-headline text-5xl font-bold text-on-primary-container shadow-2xl">
-                    {mentorsList[0].name[0].toUpperCase()}
-                  </div>
-                  <div className="absolute bottom-0 right-2 z-20 flex h-40 w-40 rotate-[6deg] items-center justify-center overflow-hidden rounded-2xl border-4 border-surface bg-tertiary-container font-headline text-5xl font-bold text-on-tertiary-container shadow-2xl backdrop-blur-md opacity-90">
-                    {user?.name?.[0].toUpperCase() || 'U'}
-                    <div className="absolute inset-0 flex items-center justify-center bg-primary/20">
-                      <Icon name="sync" className="text-4xl text-surface" />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </section>
-          )}
         </div>
 
+        {/* Sidebar */}
         <aside className="min-w-0 space-y-12 xl:col-span-4">
           <section className="section-stack">
             <h2 className="font-headline text-xl font-bold">Quick Actions</h2>
@@ -244,33 +279,41 @@ export default function DashboardPage() {
                   className="app-card flex flex-col items-center gap-3 p-6 text-center transition-all hover:bg-primary-container/20"
                 >
                   <Icon name={action.icon} className="text-3xl text-primary" />
-                  <span className="text-xs font-bold text-on-surface">{action.label}</span>
+                  <span className="text-xs font-bold text-on-surface">
+                    {action.label}
+                  </span>
                 </Link>
               ))}
             </div>
           </section>
 
           <section className="section-stack">
-            <h2 className="font-headline text-xl font-bold">Upcoming Sessions</h2>
+            <h2 className="font-headline text-xl font-bold">
+              Upcoming Sessions
+            </h2>
             <div className="space-y-4">
               {isLoadingSessions
                 ? Array.from({ length: 2 }).map((_, index) => (
                     <Skeleton key={index} className="h-32 w-full" />
                   ))
-                : dashboardSessions.length > 0 ? (
-                    dashboardSessions.map((session, index) => (
+                : dashboardSessions.length > 0
+                  ? dashboardSessions.map((session, index) => (
                       <SessionCard
                         key={`${session.title}-${index}`}
                         session={session}
                       />
                     ))
-                  ) : (
-                    <div className="rounded-2xl border border-dashed border-outline-variant/30 p-6 text-center text-sm text-stone-500">
-                      No upcoming sessions scheduled.
-                    </div>
-                  )}
+                  : (
+                      <div className="rounded-2xl border border-dashed border-outline-variant/30 p-6 text-center text-sm text-stone-500">
+                        No upcoming sessions scheduled.
+                      </div>
+                    )}
             </div>
-            <Button href="/sessions" variant="ghost" className="w-full justify-center text-stone-500">
+            <Button
+              href="/sessions"
+              variant="ghost"
+              className="w-full justify-center text-stone-500"
+            >
               View Full Schedule
             </Button>
           </section>
@@ -282,7 +325,7 @@ export default function DashboardPage() {
             </div>
             <ul className="space-y-4">
               <li className="text-sm text-stone-500">
-                You haven't uploaded any resources to your repository yet.
+                You haven&apos;t uploaded any resources to your repository yet.
               </li>
             </ul>
           </section>

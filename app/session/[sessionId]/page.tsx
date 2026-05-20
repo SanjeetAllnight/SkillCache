@@ -75,7 +75,7 @@ export default function CallPage() {
   useEffect(() => {
     if (!isAuthReady || !sessionId) return;
     if (!user) {
-      router.replace(`/auth?next=/call/${sessionId}`);
+      router.replace(`/auth?next=/session/${sessionId}`);
       return;
     }
 
@@ -84,7 +84,7 @@ export default function CallPage() {
       sessionId,
       (data) => {
         if (!data) {
-          setSessionError("Session not found.");
+          setSessionError("Session not found");
           setSessionLoading(false);
           return;
         }
@@ -102,11 +102,7 @@ export default function CallPage() {
           data.status === "accepted" ||
           data.status === "upcoming";
         if (!allowedStatus) {
-          setSessionError(
-            data.status === "pending"
-              ? "This session request has not been accepted yet."
-              : `This session is ${data.status}. Calls are only available for accepted or live sessions.`,
-          );
+          setSessionError("Invalid or expired session");
           setSessionLoading(false);
           return;
         }
@@ -122,7 +118,7 @@ export default function CallPage() {
         setSessionLoading(false);
       },
       (err) => {
-        setSessionError(err.message || "Session not found.");
+        setSessionError("Session not found");
         setSessionLoading(false);
       },
     );
@@ -214,9 +210,10 @@ export default function CallPage() {
     idle:       { label: "Ready",               color: "text-stone-400",   dot: "bg-stone-500" },
     waiting:    { label: "Waiting…",            color: "text-sky-400",     dot: "bg-sky-400 animate-pulse" },
     ringing:    { label: "Ringing…",            color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
-    connecting: { label: "Connecting…",         color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
-    connected:  { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
-    ended:      { label: "Call Ended",          color: "text-red-400",     dot: "bg-red-500" },
+    connecting:   { label: "Connecting…",         color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
+    connected:    { label: formatDuration(elapsed), color: "text-emerald-400", dot: "bg-emerald-400" },
+    reconnecting: { label: "Reconnecting...",     color: "text-amber-400",   dot: "bg-amber-400 animate-pulse" },
+    ended:        { label: "Disconnected",        color: "text-red-400",     dot: "bg-red-500" },
   };
   const pill = pillConfig[connectionPhase];
 
@@ -295,8 +292,23 @@ export default function CallPage() {
         id="remote-video"
         autoPlay
         playsInline
-        className="absolute inset-0 h-full w-full object-cover"
+        className={`absolute inset-0 h-full w-full object-cover transition duration-700 ${
+          connectionPhase === "reconnecting" ? "blur-md opacity-50 grayscale" : ""
+        }`}
       />
+
+      {/* Reconnecting overlay */}
+      {connectionPhase === "reconnecting" && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4 bg-stone-950/40">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20 ring-1 ring-amber-500/40">
+            <Spinner className="h-6 w-6 text-amber-400" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-bold text-white">Participant disconnected</p>
+            <p className="mt-1 text-sm text-stone-300">Waiting for reconnection...</p>
+          </div>
+        </div>
+      )}
 
       {/* Remote stream placeholder */}
       {!remoteStream && (
@@ -313,11 +325,7 @@ export default function CallPage() {
               {connectionPhase === "idle" && (
                 isMentor ? "Press Start Call to begin" : "Press Join Call to connect"
               )}
-              {connectionPhase === "waiting" && (
-                isMentor
-                  ? "Waiting for learner to join…"
-                  : "Waiting for mentor to start the call…"
-              )}
+              {connectionPhase === "waiting" && "Waiting for participant to join..."}
               {connectionPhase === "ringing" && "Mentor started the session — tap Join Call"}
               {connectionPhase === "connecting" && "Connecting…"}
               {connectionPhase === "ended" && "Call Ended"}
@@ -377,7 +385,7 @@ export default function CallPage() {
             role="Mentor"
             isYou={isMentor}
             online={
-              isMentor || isConnected || sharedCallStatus === "started" || sharedCallStatus === "joined"
+              isMentor || (connectionPhase !== "reconnecting" && (isConnected || sharedCallStatus === "started" || sharedCallStatus === "joined"))
             }
           />
           <ParticipantChip
@@ -385,7 +393,7 @@ export default function CallPage() {
             role="Learner"
             isYou={!isMentor}
             online={
-              !isMentor || isConnected || sharedCallStatus === "joined"
+              !isMentor || (connectionPhase !== "reconnecting" && (isConnected || sharedCallStatus === "joined"))
             }
           />
         </div>
@@ -447,10 +455,8 @@ export default function CallPage() {
               {connectionPhase === "waiting" ? "Waiting" : connectionPhase === "ringing" ? "Ringing" : "Connecting"}
             </span>
             <p className="text-[11px] text-stone-400 text-center max-w-[180px]">
-              {connectionPhase === "waiting" && isMentor
-                ? "Waiting for learner to join…"
-                : connectionPhase === "waiting" && !isMentor
-                ? "Waiting for mentor to start…"
+              {connectionPhase === "waiting"
+                ? "Waiting for participant to join..."
                 : connectionPhase === "ringing"
                 ? "Mentor started the session"
                 : "Establishing secure stream…"}

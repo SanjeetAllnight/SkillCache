@@ -267,8 +267,8 @@ export default function SessionsPage() {
               onAccept={handleAccept}
               onReject={handleReject}
               onReschedule={setReschedulingSession}
-              onJoin={(nextSession) => router.push(`/call/${nextSession._id}`)}
-              onStart={(nextSession) => router.push(`/call/${nextSession._id}`)}
+              onJoin={(nextSession) => router.push(`/session/${nextSession._id}`)}
+              onStart={(nextSession) => router.push(`/session/${nextSession._id}`)}
             />
           ))}
         </SessionSection>
@@ -288,8 +288,8 @@ export default function SessionsPage() {
               session={session}
               viewerId={user?._id ?? ""}
               pending={pendingActionId === session._id}
-              onJoin={(nextSession) => router.push(`/call/${nextSession._id}`)}
-              onStart={(nextSession) => router.push(`/call/${nextSession._id}`)}
+              onJoin={(nextSession) => router.push(`/session/${nextSession._id}`)}
+              onStart={(nextSession) => router.push(`/session/${nextSession._id}`)}
             />
           ))}
         </SessionSection>
@@ -310,8 +310,8 @@ export default function SessionsPage() {
               viewerId={user?._id ?? ""}
               pending={pendingActionId === session._id}
               onReschedule={setReschedulingSession}
-              onJoin={(nextSession) => router.push(`/call/${nextSession._id}`)}
-              onStart={(nextSession) => router.push(`/call/${nextSession._id}`)}
+              onJoin={(nextSession) => router.push(`/session/${nextSession._id}`)}
+              onStart={(nextSession) => router.push(`/session/${nextSession._id}`)}
             />
           ))}
         </SessionSection>

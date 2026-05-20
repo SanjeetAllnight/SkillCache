@@ -6,6 +6,8 @@ export type BackendUser = {
   skillsWanted?: string[];
   bio?: string;
   avatar?: string;
+  /** false on brand-new accounts, set to true after onboarding completes */
+  firstLoginCompleted?: boolean;
 };
 
 export type MockUser = {

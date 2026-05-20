@@ -44,6 +44,7 @@ export type ConnectionPhase =
   | "ringing"     // learner: mentor started, awaiting join tap
   | "connecting"  // SDP exchange in progress
   | "connected"   // ICE connected, streams flowing
+  | "reconnecting"// ICE disconnected, attempting to restore
   | "ended";
 
 export interface UseWebRTCOptions {
@@ -204,6 +205,7 @@ export function useWebRTC({
         safeSet(setConnectionPhase, "ended" as ConnectionPhase);
       } else if (pc.iceConnectionState === "disconnected") {
         safeSet(setIsConnected, false);
+        safeSet(setConnectionPhase, "reconnecting" as ConnectionPhase);
       }
     };
 

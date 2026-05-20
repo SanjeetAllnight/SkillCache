@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Icon } from "@/components/ui/icon";
 import { useAuth } from "@/components/providers/auth-provider";
-import { updateUserProfile } from "@/lib/firebaseServices";
+import { updateUserProfile, markFirstLoginCompleted } from "@/lib/firebaseServices";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,6 +40,9 @@ export default function CompleteProfilePage() {
         skillsWanted:  parseSkills(skillsWanted),
         bio:           bio.trim(),
       });
+      // Mark the account as a returning user — dashboard will now show
+      // "Welcome back" on all future logins.
+      await markFirstLoginCompleted(user._id);
       router.replace("/dashboard");
     } catch (err) {
       setError((err as Error).message);
