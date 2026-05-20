@@ -1,5 +1,6 @@
 export type RouteKey =
   | "dashboard"
+  | "discover"
   | "mentors"
   | "sessions"
   | "sessionDetails"
@@ -27,6 +28,7 @@ export type SidebarConfig = {
 
 export const navItems: NavItem[] = [
   { href: "/dashboard", icon: "dashboard", label: "Dashboard" },
+  { href: "/discover", icon: "explore", label: "Discover" },
   { href: "/mentors", icon: "diversity_3", label: "Find Mentors" },
   { href: "/sessions", icon: "calendar_today", label: "Sessions" },
   { href: "/repository", icon: "folder_open", label: "Repository" },
@@ -39,6 +41,12 @@ const headerConfigs: Record<RouteKey, HeaderConfig> = {
     actionLabel: "New Session",
     actionVariant: "primary",
     actionHref: "/sessions/advanced-clay-glazing-techniques",
+  },
+  discover: {
+    placeholder: "Search community...",
+    actionLabel: "Host Workshop",
+    actionVariant: "primary",
+    actionHref: "/workshops/new",
   },
   mentors: {
     placeholder: "Search mentors by craft, name, or skill...",
@@ -82,6 +90,7 @@ const sidebarConfigs: Record<RouteKey, SidebarConfig> = {
   dashboard: {
     showProfileFooter: true,
   },
+  discover: {},
   mentors: {
     shareIcon: "add",
   },
@@ -105,6 +114,9 @@ export function getRouteKey(pathname: string): RouteKey {
   }
   if (pathname.startsWith("/mentors")) {
     return "mentors";
+  }
+  if (pathname.startsWith("/discover")) {
+    return "discover";
   }
   if (pathname.startsWith("/repository")) {
     return "repository";

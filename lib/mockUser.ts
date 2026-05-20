@@ -8,6 +8,7 @@ export type BackendUser = {
   avatar?: string;
   /** false on brand-new accounts, set to true after onboarding completes */
   firstLoginCompleted?: boolean;
+  isSeeded?: boolean;
 };
 
 export type MockUser = {

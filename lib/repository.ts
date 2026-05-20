@@ -81,12 +81,14 @@ export type FirestoreResourceDocument = {
   searchText: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+  isSeeded?: boolean;
 };
 
 export type KnowledgeResource = FirestoreResourceDocument & {
   id: string;
   createdAtMillis: number;
   updatedAtMillis: number;
+  isSeeded?: boolean;
 };
 
 export type ResourceViewerState = {
@@ -309,6 +311,7 @@ function normalizeResource(id: string, data: Partial<FirestoreResourceDocument> 
     updatedAt: data.updatedAt,
     createdAtMillis,
     updatedAtMillis,
+    isSeeded: data.isSeeded,
   };
 }
 
@@ -624,10 +627,13 @@ export async function listRepositoryResources(options: {
 
   const snap = await getDocs(query(resourcesCollection, ...constraints));
 
-  // Sort client-side by createdAt descending
+  // Sort client-side by isSeeded (real first) then createdAt descending
   const sorted = snap.docs.sort((a, b) => {
-    const aMillis = toMillis(a.data().createdAt);
-    const bMillis = toMillis(b.data().createdAt);
+    const aData = a.data();
+    const bData = b.data();
+    if (aData.isSeeded !== bData.isSeeded) return aData.isSeeded ? 1 : -1;
+    const aMillis = toMillis(aData.createdAt);
+    const bMillis = toMillis(bData.createdAt);
     return bMillis - aMillis;
   });
 

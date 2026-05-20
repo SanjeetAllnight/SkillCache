@@ -117,10 +117,13 @@ export function AuthProvider({
 
         // Profile-completion gate
         const currentPath = pathnameRef.current;
+        let requiresOnboarding = false;
+
         if (currentPath && !currentPath.startsWith("/complete-profile")) {
           try {
             const profile = await getUserProfile(firebaseUser.uid);
             if (!profile || profile.profileComplete === false) {
+              requiresOnboarding = true;
               routerRef.current.replace("/complete-profile");
             }
           } catch {
@@ -129,7 +132,7 @@ export function AuthProvider({
         }
 
         // If auth is ready and user lands on /auth while logged in → dashboard
-        if (currentPath === "/auth") {
+        if (currentPath === "/auth" && !requiresOnboarding) {
           routerRef.current.replace(DEFAULT_AUTH_REDIRECT);
         }
       } else {
@@ -213,12 +216,10 @@ export function AuthProvider({
     // Step 3 — Tell Firebase to invalidate the session.
     await signOut(auth);
 
-    // Step 4 — Navigate. Middleware will now see no cookie → allow /auth.
-    router.replace("/auth");
-    // Force a full server-component re-render so the root layout re-reads
-    // the (now absent) cookie and passes initialIsLoggedIn=false.
-    router.refresh();
-  }, [router]);
+    // Step 4 — Navigate with a full page reload. This prevents Next.js 
+    // client-side cache from retaining old layout/context state.
+    window.location.href = "/auth";
+  }, []);
 
   const value = useMemo(
     () => ({

@@ -82,6 +82,10 @@ export default function DashboardPage() {
     (s) => s.status === "accepted" || s.status === "upcoming",
   ).length;
 
+  const skillsExchangedCount = new Set(
+    sessions.filter((s) => s.status === "completed").map((s) => s.skill)
+  ).size;
+
   const stats = [
     {
       label: "Total Sessions",
@@ -92,13 +96,13 @@ export default function DashboardPage() {
     },
     {
       label: "Skills Exchanged",
-      value: (user?.skillsOffered?.length ?? 0).toString().padStart(2, "0"),
+      value: skillsExchangedCount.toString().padStart(2, "0"),
       change: "active arsenal",
       icon: "auto_awesome",
       tone: "secondary",
     },
     {
-      label: "Completed",
+      label: "Focus hours",
       value: completedSessions.toString().padStart(2, "0"),
       change: "sessions done",
       icon: "schedule",
@@ -142,14 +146,14 @@ export default function DashboardPage() {
           {greetingPrefix}
           <span className="text-primary">{user?.name}</span>.
         </h1>
-        <p className="max-w-xl text-lg text-on-surface-variant">
+        <div className="max-w-xl text-lg text-on-surface-variant">
           Your creative laboratory is ready.{" "}
           {isLoadingSessions ? (
             <Skeleton className="inline-block h-5 w-24 align-middle" />
           ) : (
             <>You have {upcomingCount} upcoming session{upcomingCount !== 1 ? "s" : ""}.</>
           )}
-        </p>
+        </div>
       </section>
 
       {/* ── Stat cards ────────────────────────────────────────────────── */}

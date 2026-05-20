@@ -36,6 +36,7 @@ export type FirestoreUser = {
    * true   = returning user who completed /complete-profile at least once.
    */
   firstLoginCompleted?: boolean;
+  isSeeded?: boolean;
 };
 
 /** Real-time call lifecycle state stored on the session document. */
@@ -75,6 +76,7 @@ export type FirestoreSession = {
   updatedAt?: FieldValue;
   /** Real-time call state — written by participants during a call. */
   callStatus?: CallStatus;
+  isSeeded?: boolean;
 };
 
 export type ApiSession = {
@@ -95,6 +97,7 @@ export type ApiSession = {
   rescheduleNote?: string;
   /** Real-time call state — present once a call has been initiated. */
   callStatus?: CallStatus;
+  isSeeded?: boolean;
 };
 
 export type FirestoreResource = {
@@ -140,10 +143,36 @@ export type FirestoreSkill = {
 
 export type ApiSkill = FirestoreSkill & { _id: string };
 
+export type FirestoreWorkshop = {
+  title: string;
+  hostId: string;
+  date: string;
+  durationMinutes: number;
+  participantCount: number;
+  description: string;
+  tags: string[];
+  createdAt?: FieldValue;
+  isSeeded?: boolean;
+};
+
+export type ApiWorkshop = {
+  _id: string;
+  title: string;
+  hostId: string;
+  hostName: string;
+  date: string;
+  durationMinutes: number;
+  participantCount: number;
+  description: string;
+  tags: string[];
+  isSeeded?: boolean;
+};
+
 // Collection references
 const usersCollection = collection(db, "users");
 const sessionsCollection = collection(db, "sessions");
 const resourcesCollection = collection(db, "resources");
+const workshopsCollection = collection(db, "workshops");
 
 function normalizeSessionStatus(status?: RawSessionStatus): SessionStatus {
   if (status === "scheduled" || status === "waiting") return "upcoming";
@@ -157,6 +186,7 @@ function fallbackUser(uid: string, label: string): BackendUser {
     email: "",
     skillsOffered: [],
     skillsWanted: [],
+    isSeeded: false,
   };
 }
 
@@ -188,10 +218,12 @@ function toApiSession(
     cancellationReason: data.cancellationReason,
     rescheduleNote: data.rescheduleNote,
     callStatus: data.callStatus,
+    isSeeded: data.isSeeded,
   };
 }
 
 function sortSessionsDescending(a: ApiSession, b: ApiSession) {
+  if (a.isSeeded !== b.isSeeded) return a.isSeeded ? 1 : -1;
   return new Date(b.date).getTime() - new Date(a.date).getTime();
 }
 
@@ -276,17 +308,20 @@ export async function updateUserProfile(
  */
 export async function getUsers(): Promise<BackendUser[]> {
   const snapshot = await getDocs(usersCollection);
-  return snapshot.docs.map((d) => {
-    const data = d.data() as FirestoreUser;
-    return {
-      _id: d.id,
-      name: data.name,
-      email: data.email,
-      skillsOffered: data.skillsOffered || [],
-      skillsWanted: data.skillsWanted || [],
-      // map rating/completed to UI requirements if necessary
-    };
-  });
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data() as FirestoreUser;
+      return {
+        _id: d.id,
+        name: data.name,
+        email: data.email,
+        skillsOffered: data.skillsOffered || [],
+        skillsWanted: data.skillsWanted || [],
+        isSeeded: data.isSeeded,
+        // map rating/completed to UI requirements if necessary
+      };
+    })
+    .sort((a, b) => (a.isSeeded ? 1 : 0) - (b.isSeeded ? 1 : 0));
 }
 
 /**
@@ -748,6 +783,85 @@ export async function getSessionById(sessionId: string): Promise<ApiSession> {
   const session = toApiSession(sessionSnap.id, sessionSnap.data() as FirestoreSession, usersMap);
   if (!session) throw new Error("Session not found");
   return session;
+}
+
+// ─── Workshops ────────────────────────────────────────────────────────────────
+
+export async function getWorkshops(): Promise<ApiWorkshop[]> {
+  const snapshot = await getDocs(workshopsCollection);
+  if (snapshot.empty) return [];
+
+  const allUsers = await getUsers();
+  const usersMap = new Map(allUsers.map((u) => [u._id, u.name]));
+
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data() as FirestoreWorkshop;
+      return {
+        _id: d.id,
+        title: data.title,
+        hostId: data.hostId,
+        hostName: usersMap.get(data.hostId) ?? "Unknown Host",
+        date: data.date,
+        durationMinutes: data.durationMinutes,
+        participantCount: data.participantCount,
+        description: data.description,
+        tags: data.tags || [],
+        isSeeded: data.isSeeded,
+      } satisfies ApiWorkshop;
+    })
+    .sort((a, b) => {
+      if (a.isSeeded !== b.isSeeded) return a.isSeeded ? 1 : -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+}
+
+export async function addWorkshop(data: Omit<FirestoreWorkshop, "createdAt">): Promise<string> {
+  const docRef = await addDoc(workshopsCollection, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export async function seedDemoWorkshops(hostId: string): Promise<void> {
+  const snapshot = await getDocs(workshopsCollection);
+  if (!snapshot.empty) return; // Already seeded
+
+  const now = Date.now();
+  const templates = [
+    {
+      title: "Mastering React Hooks",
+      hostId,
+      date: new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 60,
+      participantCount: 12,
+      description: "Deep dive into custom hooks, context, and performance optimization.",
+      tags: ["React", "JavaScript", "Frontend"],
+    },
+    {
+      title: "Introduction to Figma Auto Layout",
+      hostId,
+      date: new Date(now + 5 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 45,
+      participantCount: 8,
+      description: "Learn how to build responsive UI components using Figma's Auto Layout feature.",
+      tags: ["Figma", "Design", "UI/UX"],
+    },
+    {
+      title: "Building Resilient APIs with Node.js",
+      hostId,
+      date: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 90,
+      participantCount: 20,
+      description: "Best practices for error handling, rate limiting, and testing in Node.js.",
+      tags: ["Node.js", "Backend", "API"],
+    },
+  ];
+
+  for (const template of templates) {
+    await addWorkshop(template);
+  }
 }
 
 // ─── Call status helpers ──────────────────────────────────────────────────────
