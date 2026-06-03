@@ -57,14 +57,6 @@ export function Navbar() {
       </div>
 
       <div className="ml-2 flex items-center gap-3 sm:ml-4 md:ml-8 md:gap-4 lg:gap-6">
-        <div className="hidden items-center gap-3 text-stone-500 sm:flex md:gap-4">
-          <button type="button" className="transition-opacity hover:opacity-80">
-            <Icon name="notifications" />
-          </button>
-          <button type="button" className="transition-opacity hover:opacity-80">
-            <Icon name="settings" />
-          </button>
-        </div>
         {config.actionVariant === "text" ? (
           <>
             <div className="hidden h-8 w-px bg-outline-variant/30 md:block" />
@@ -94,16 +86,16 @@ export function Navbar() {
               onClick={logout}
               className="hidden border-outline-variant/60 bg-surface-container-low md:inline-flex"
             >
-              {process.env.NODE_ENV === "development" ? "Switch Account" : "Logout"}
-              <Icon name={process.env.NODE_ENV === "development" ? "swap_horiz" : "logout"} className="text-base" />
+              Logout
+              <Icon name="logout" className="text-base" />
             </Button>
             <button
               type="button"
               onClick={logout}
               className="rounded-full bg-surface-container-low p-2 text-stone-500 transition-colors hover:bg-surface-container-high md:hidden"
-              aria-label={process.env.NODE_ENV === "development" ? "Switch Account" : "Logout"}
+              aria-label="Logout"
             >
-              <Icon name={process.env.NODE_ENV === "development" ? "swap_horiz" : "logout"} />
+              <Icon name="logout" />
             </button>
             <Link
               href="/profile"

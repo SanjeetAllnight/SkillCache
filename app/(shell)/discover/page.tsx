@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import Image from "next/image";
 
 import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
@@ -14,10 +13,8 @@ import { KnowledgeResourceCard } from "@/components/repository/knowledge-resourc
 import {
   getUsers,
   getSessions,
-  getWorkshops,
-  getResources,
+  listenPublicSessions,
   type ApiSession,
-  type ApiWorkshop,
 } from "@/lib/firebaseServices";
 import { ensureDiscoverDataSeeded } from "@/lib/seedData";
 import { listRepositoryResources, type KnowledgeResource } from "@/lib/repository";
@@ -54,7 +51,7 @@ export default function DiscoverPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<BackendUser[]>([]);
   const [sessions, setSessions] = useState<ApiSession[]>([]);
-  const [workshops, setWorkshops] = useState<ApiWorkshop[]>([]);
+  const [publicWorkshops, setPublicWorkshops] = useState<ApiSession[]>([]);
   const [resources, setResources] = useState<KnowledgeResource[]>([]);
 
   useEffect(() => {
@@ -67,17 +64,15 @@ export default function DiscoverPage() {
         // Ensure the platform has realistic demo content so it doesn't look empty
         await ensureDiscoverDataSeeded();
 
-        const [uRes, sRes, wRes, rRes] = await Promise.all([
+        const [uRes, sRes, rRes] = await Promise.all([
           getUsers(),
           getSessions(),
-          getWorkshops(),
           listRepositoryResources({ scope: "community", pageSize: 10 }),
         ]);
 
         if (isMounted) {
           setUsers(uRes);
           setSessions(sRes);
-          setWorkshops(wRes);
           setResources(rRes.resources);
         }
       } catch (err) {
@@ -89,8 +84,13 @@ export default function DiscoverPage() {
 
     void loadData();
 
+    const unsubscribeWorkshops = listenPublicSessions((data) => {
+      if (isMounted) setPublicWorkshops(data);
+    });
+
     return () => {
       isMounted = false;
+      unsubscribeWorkshops();
     };
   }, [user, isAuthReady]);
 
@@ -117,7 +117,7 @@ export default function DiscoverPage() {
   
   // Featured mentors: Top 4 by some metric (here we'll just use the ones with most skills offered for now)
   const featuredMentors = [...users]
-    .filter((u) => u.skillsOffered?.length > 0 && u._id !== user?._id)
+    .filter((u) => (u.skillsOffered?.length ?? 0) > 0 && u._id !== user?._id)
     .sort((a, b) => (b.skillsOffered?.length || 0) - (a.skillsOffered?.length || 0))
     .slice(0, 4);
 
@@ -146,10 +146,10 @@ export default function DiscoverPage() {
             Explore trending skills, join live workshops, and connect with expert mentors in the SkillCache atelier.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
-            <Button variant="inverse" size="lg" href="/mentors">
+            <Button variant="dark" size="lg" href="/mentors">
               Find a Mentor
             </Button>
-            <Button variant="ghost" size="lg" className="text-on-primary hover:bg-on-primary/10">
+            <Button variant="ghost" size="lg" className="text-on-primary hover:bg-on-primary/10" href="#workshops">
               Browse Workshops
             </Button>
           </div>
@@ -162,7 +162,7 @@ export default function DiscoverPage() {
       <section className="section-stack mt-12">
         <div className="flex items-center justify-between">
           <h2 className="font-headline text-2xl font-bold">Trending Skills</h2>
-          <Button variant="ghost" size="sm" className="text-primary">View All</Button>
+          <Button variant="ghost" size="sm" className="text-primary" href="/mentors">View All</Button>
         </div>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {trendingSkills.map((skill, i) => (
@@ -194,11 +194,11 @@ export default function DiscoverPage() {
       </section>
 
       {/* ── Section 2: Upcoming Workshops ───────────────────────────────────── */}
-      <section className="section-stack mt-12">
+      <section id="workshops" className="section-stack mt-12">
         <h2 className="font-headline text-2xl font-bold">Upcoming Workshops</h2>
-        {workshops.length > 0 ? (
+        {publicWorkshops.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {workshops.map((workshop) => (
+            {publicWorkshops.map((workshop) => (
               <div key={workshop._id} className="app-card flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl">
                 <div>
                   <div className="flex items-start justify-between">
@@ -206,7 +206,7 @@ export default function DiscoverPage() {
                       <Icon name="event" className="text-[16px]" /> Workshop
                     </div>
                     <span className="rounded-full bg-surface-container-high px-2.5 py-1 text-xs font-semibold text-on-surface-variant">
-                      {workshop.durationMinutes} min
+                      {workshop.durationMinutes ?? 30} min
                     </span>
                   </div>
                   <h3 className="mt-3 font-headline text-xl font-bold line-clamp-2">{workshop.title}</h3>
@@ -214,10 +214,10 @@ export default function DiscoverPage() {
                   
                   <div className="mt-6 flex items-center gap-3">
                     <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container text-xs font-bold text-on-primary-container">
-                      {workshop.hostName[0]}
+                      {workshop.mentor.name[0]}
                     </div>
                     <div className="text-sm">
-                      <p className="font-semibold text-on-surface">By {workshop.hostName}</p>
+                      <p className="font-semibold text-on-surface">By {workshop.mentor.name}</p>
                       <p className="text-xs text-stone-500">{new Date(workshop.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
                     </div>
                   </div>
@@ -225,16 +225,20 @@ export default function DiscoverPage() {
                 <div className="mt-6 flex items-center justify-between border-t border-outline-variant/30 pt-4">
                   <span className="text-xs font-medium text-stone-500">
                     <Icon name="group" className="inline text-[14px] align-text-bottom mr-1" />
-                    {workshop.participantCount} attending
+                    {(workshop.maxParticipants ?? 10) - 1} seats left
                   </span>
-                  <Button variant="softPrimary" size="sm">Register</Button>
+                  <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-semibold text-on-surface-variant">
+                    Open
+                  </span>
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-outline-variant/30 p-10 text-center text-sm text-stone-500">
-            No upcoming workshops. Host one today!
+            <Icon name="event_busy" className="text-4xl text-stone-300 mb-3" />
+            <p className="font-medium text-on-surface">No upcoming workshops</p>
+            <p className="mt-1">Check back soon — workshops are added by mentors regularly.</p>
           </div>
         )}
       </section>
@@ -281,7 +285,7 @@ export default function DiscoverPage() {
                     role: m.skillsOffered?.[0] ? `${m.skillsOffered[0]} Mentor` : "Community Mentor",
                     quote: m.bio || "Passionate about sharing knowledge and growing together.",
                     tags: m.skillsOffered || [],
-                    rating: (m.rating || 5).toFixed(1),
+                    rating: "5.0",
                     image: m.avatar || "",
                     profileHref: `/profile?mentor=${m._id}`,
                   }} 
@@ -311,7 +315,7 @@ export default function DiscoverPage() {
                           role: m.skillsOffered?.[0] ? `${m.skillsOffered[0]} Mentor` : "Community Mentor",
                           quote: m.bio || "Passionate about sharing knowledge and growing together.",
                           tags: m.skillsOffered || [],
-                          rating: (m.rating || 5).toFixed(1),
+                          rating: "5.0",
                           image: m.avatar || "",
                           profileHref: `/profile?mentor=${m._id}`,
                         }} 

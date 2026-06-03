@@ -56,7 +56,7 @@ export function Sidebar() {
           {sidebarConfig.shareIcon ? (
             <Icon name={sidebarConfig.shareIcon} className="text-lg" />
           ) : null}
-          Share a Skill
+          Add a Skill
         </Button>
 
         {sidebarConfig.showProfileFooter && isLoggedIn ? (

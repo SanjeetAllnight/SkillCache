@@ -48,6 +48,12 @@ export function SessionRequestModal({
   const [skill, setSkill] = useState(session?.skill ?? "");
   const [mentorId, setMentorId] = useState(session?.mentorId ?? "");
   const [date, setDate] = useState(toDatetimeLocal(session?.date));
+  const [sessionType, setSessionType] = useState<"private" | "public">(
+    session?.sessionType ?? "private"
+  );
+  const [durationMinutes, setDurationMinutes] = useState<number>(
+    session?.durationMinutes ?? 30
+  );
   const [rescheduleNote, setRescheduleNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,6 +123,10 @@ export function SessionRequestModal({
         learnerId: currentUser._id,
         skill: firstSkill,
         date: toISODate(date),
+        sessionType,
+        durationMinutes,
+        visibility: sessionType,
+        maxParticipants: sessionType === "public" ? 10 : 2,
       });
       onSaved();
     } catch (saveError) {
@@ -135,6 +145,8 @@ export function SessionRequestModal({
     session,
     skill,
     title,
+    sessionType,
+    durationMinutes,
   ]);
 
   return (
@@ -245,6 +257,40 @@ export function SessionRequestModal({
               <p className="mt-1 text-xs text-on-surface-variant">
                 Current mentor: {session?.mentor.name}
               </p>
+            </div>
+          )}
+
+          {!isReschedule && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                  Session Type
+                </span>
+                <select
+                  value={sessionType}
+                  onChange={(e) => setSessionType(e.target.value as "private" | "public")}
+                  className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                >
+                  <option value="private">Private Session</option>
+                  <option value="public">Public Workshop</option>
+                </select>
+              </label>
+
+              <label className="space-y-1.5">
+                <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                  Duration
+                </span>
+                <select
+                  value={durationMinutes.toString()}
+                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                  className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                >
+                  <option value="15">15 Minutes</option>
+                  <option value="30">30 Minutes</option>
+                  <option value="45">45 Minutes</option>
+                  <option value="60">60 Minutes</option>
+                </select>
+              </label>
             </div>
           )}
 

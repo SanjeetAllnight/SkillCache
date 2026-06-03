@@ -1,54 +1,23 @@
 /**
  * lib/callSignaling.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Firestore-backed WebRTC signaling layer.
+ * Firestore-backed WebRTC Mesh signaling layer.
  *
- * Firestore schema
- * ────────────────
- * calls/{callId}
- *   ├─ offer          : RTCSessionDescriptionInit | null
- *   ├─ answer         : RTCSessionDescriptionInit | null
- *   ├─ participants   : string[]          (array of uid strings)
- *   ├─ status         : CallStatus
- *   ├─ createdAt      : Timestamp
- *   └─ updatedAt      : Timestamp
- *
- * calls/{callId}/candidates/{candidateId}
- *   ├─ uid            : string            (who sent this candidate)
- *   ├─ candidate      : RTCIceCandidateInit
- *   └─ createdAt      : Timestamp
- *
- * Usage
- * ─────
- *   // Caller
- *   const callId = sessionId;
- *   await createCall(callId, callerUid, offer);
- *   const unsub = listenForSignals(callId, callerUid, { onAnswer, onCandidate });
- *
- *   // Callee
- *   await joinCall(callId, calleeUid, answer);
- *   const unsub = listenForSignals(callId, calleeUid, { onOffer, onCandidate });
- *
- *   // Both
- *   await sendSignal(callId, myUid, iceCandidate);
- *
- *   // Cleanup
- *   unsub();
- * ─────────────────────────────────────────────────────────────────────────────
+ * For a full mesh network, we use:
+ * 1. Presence Collection: Discover who is in the room.
+ * 2. Connection Documents: Store Offer/Answer per peer-to-peer link.
+ * 3. Candidates Subcollections: Exchange ICE candidates per link.
  */
 
 import {
   addDoc,
-  arrayUnion,
   collection,
   deleteDoc,
   doc,
-  getDoc,
   onSnapshot,
   serverTimestamp,
   setDoc,
   updateDoc,
-  type DocumentData,
   type Unsubscribe,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -56,21 +25,24 @@ import { db } from "./firebase";
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const CALLS_COLLECTION = "calls";
-const CANDIDATES_SUBCOLLECTION = "candidates";
+const PRESENCE_SUBCOLLECTION = "presence";
+const CONNECTIONS_SUBCOLLECTION = "connections";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type CallStatus = "ringing" | "active" | "ended";
+export interface PresenceDocument {
+  uid: string;
+  name: string;
+  role: "mentor" | "learner";
+  kicked: boolean;
+  joinedAt: ReturnType<typeof serverTimestamp>;
+}
 
-export interface CallDocument {
+export interface ConnectionDocument {
   offer: RTCSessionDescriptionInit | null;
   answer: RTCSessionDescriptionInit | null;
-  participants: string[];
-  /** UID of the user who created the offer — only they should receive the answer. */
   initiatorUid: string;
-  status: CallStatus;
-  createdAt: ReturnType<typeof serverTimestamp>;
-  updatedAt: ReturnType<typeof serverTimestamp>;
+  receiverUid: string;
 }
 
 export interface CandidateDocument {
@@ -79,233 +51,148 @@ export interface CandidateDocument {
   createdAt: ReturnType<typeof serverTimestamp>;
 }
 
-export interface SignalListenerOptions {
-  /**
-   * Fires when the remote side's SDP offer arrives (callee side).
-   * Will NOT fire for the participant who originally sent the offer.
-   */
-  onOffer?: (offer: RTCSessionDescriptionInit) => void;
-  /**
-   * Fires when the remote side's SDP answer arrives (caller side).
-   * Will NOT fire for the participant who originally sent the answer.
-   */
-  onAnswer?: (answer: RTCSessionDescriptionInit) => void;
-  /**
-   * Fires for every new ICE candidate from the *remote* peer.
-   * Candidates sent by `myUid` are filtered out automatically.
-   */
-  onCandidate?: (candidate: RTCIceCandidateInit) => void;
-  /** Fires when the call status changes. */
-  onStatusChange?: (status: CallStatus) => void;
-}
+// ─── Presence ─────────────────────────────────────────────────────────────────
 
-// ─── Internal helpers ────────────────────────────────────────────────────────
-
-function callDocRef(callId: string) {
-  return doc(db, CALLS_COLLECTION, callId);
-}
-
-function candidatesRef(callId: string) {
-  return collection(db, CALLS_COLLECTION, callId, CANDIDATES_SUBCOLLECTION);
-}
-
-// ─── createCall ───────────────────────────────────────────────────────────────
-
-/**
- * Called by the **initiator** (caller).
- * Creates the call document with the SDP offer and marks the caller as a participant.
- *
- * @param callId   Firestore document ID to use (typically the session ID).
- * @param callerUid Firebase Auth UID of the initiator.
- * @param offer    SDP offer produced by simple-peer.
- */
-export async function createCall(
+export async function joinPresence(
   callId: string,
-  callerUid: string,
-  offer: RTCSessionDescriptionInit
+  uid: string,
+  name: string,
+  role: "mentor" | "learner"
 ): Promise<void> {
-  const payload: CallDocument = {
-    offer,
-    answer: null,
-    participants: [callerUid],
-    initiatorUid: callerUid,   // ← stored so listenForSignals can route answer correctly
-    status: "ringing",
-    createdAt: serverTimestamp() as ReturnType<typeof serverTimestamp>,
-    updatedAt: serverTimestamp() as ReturnType<typeof serverTimestamp>,
-  };
-
-  await setDoc(callDocRef(callId), payload);
-}
-
-// ─── joinCall ─────────────────────────────────────────────────────────────────
-
-/**
- * Called by the **callee** (joiner).
- * Writes the SDP answer and adds the callee to the participants list.
- *
- * @param callId    The existing call document ID.
- * @param calleeUid Firebase Auth UID of the answerer.
- * @param answer    SDP answer produced by simple-peer.
- */
-export async function joinCall(
-  callId: string,
-  calleeUid: string,
-  answer: RTCSessionDescriptionInit
-): Promise<void> {
-  await updateDoc(callDocRef(callId), {
-    answer,
-    status: "active",
-    participants: arrayUnion(calleeUid),
-    updatedAt: serverTimestamp(),
+  await setDoc(doc(db, CALLS_COLLECTION, callId, PRESENCE_SUBCOLLECTION, uid), {
+    uid,
+    name,
+    role,
+    kicked: false,
+    joinedAt: serverTimestamp(),
   });
 }
 
-// ─── sendSignal ───────────────────────────────────────────────────────────────
+export async function leavePresence(callId: string, uid: string): Promise<void> {
+  try {
+    await deleteDoc(doc(db, CALLS_COLLECTION, callId, PRESENCE_SUBCOLLECTION, uid));
+  } catch {
+    // Best-effort
+  }
+}
 
-/**
- * Sends an ICE candidate to Firestore so the remote peer can receive it.
- * Both caller and callee call this whenever simple-peer emits a new candidate.
- *
- * @param callId    The call document ID.
- * @param senderUid Firebase Auth UID of the sender (so we can filter on listen).
- * @param candidate RTCIceCandidateInit from simple-peer's `signal` event.
- */
-export async function sendSignal(
+export async function kickParticipant(callId: string, targetUid: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, CALLS_COLLECTION, callId, PRESENCE_SUBCOLLECTION, targetUid), {
+      kicked: true,
+    });
+  } catch {
+    // Best-effort
+  }
+}
+
+export function listenToPresence(
   callId: string,
+  onUpdate: (presenceList: PresenceDocument[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db, CALLS_COLLECTION, callId, PRESENCE_SUBCOLLECTION), (snap) => {
+    const list: PresenceDocument[] = [];
+    snap.forEach((doc) => {
+      list.push(doc.data() as PresenceDocument);
+    });
+    onUpdate(list);
+  });
+}
+
+// ─── Connections ──────────────────────────────────────────────────────────────
+
+export function getConnectionId(uidA: string, uidB: string): string {
+  // Lexicographical sort to ensure consistent connection ID for both peers
+  return uidA < uidB ? `${uidA}_${uidB}` : `${uidB}_${uidA}`;
+}
+
+export async function createConnectionOffer(
+  callId: string,
+  connectionId: string,
+  initiatorUid: string,
+  receiverUid: string,
+  offer: RTCSessionDescriptionInit
+): Promise<void> {
+  await setDoc(doc(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId), {
+    initiatorUid,
+    receiverUid,
+    offer,
+    answer: null,
+  });
+}
+
+export async function answerConnectionOffer(
+  callId: string,
+  connectionId: string,
+  answer: RTCSessionDescriptionInit
+): Promise<void> {
+  await updateDoc(doc(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId), {
+    answer,
+  });
+}
+
+export async function sendConnectionSignal(
+  callId: string,
+  connectionId: string,
   senderUid: string,
   candidate: RTCIceCandidateInit
 ): Promise<void> {
-  const payload: CandidateDocument = {
-    uid: senderUid,
-    candidate,
-    createdAt: serverTimestamp() as ReturnType<typeof serverTimestamp>,
-  };
-
-  await addDoc(candidatesRef(callId), payload);
+  await addDoc(
+    collection(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId, "candidates"),
+    {
+      uid: senderUid,
+      candidate,
+      createdAt: serverTimestamp(),
+    }
+  );
 }
 
-// ─── endCall ──────────────────────────────────────────────────────────────────
-
-/**
- * Marks the call as ended. Either participant can call this.
- */
-export async function endCall(callId: string): Promise<void> {
-  try {
-    await updateDoc(callDocRef(callId), {
-      status: "ended",
-      updatedAt: serverTimestamp(),
-    });
-  } catch {
-    // doc may already be gone — best-effort
-  }
-}
-
-/**
- * Deletes the call document entirely (candidates sub-collection is
- * cleaned up by a Cloud Function or left to TTL rules).
- * Call this AFTER the "ended" status has been delivered to both sides.
- */
-export async function clearCallDoc(callId: string): Promise<void> {
-  try {
-    await deleteDoc(callDocRef(callId));
-  } catch {
-    // best-effort
-  }
-}
-
-// ─── getCallOffer ─────────────────────────────────────────────────────────────
-
-/**
- * One-time fetch of the offer stored in a call document.
- * Useful for the callee who joins after the offer was already written.
- */
-export async function getCallOffer(
-  callId: string
-): Promise<RTCSessionDescriptionInit | null> {
-  const snap = await getDoc(callDocRef(callId));
-  if (!snap.exists()) return null;
-  return (snap.data() as CallDocument).offer ?? null;
-}
-
-// ─── listenForSignals ────────────────────────────────────────────────────────
-
-/**
- * Attaches **two** real-time Firestore listeners for a given call:
- *
- * 1. `onSnapshot` on `calls/{callId}` — watches for offer / answer / status changes.
- * 2. `onSnapshot` on `calls/{callId}/candidates` — watches for new ICE candidates,
- *    automatically **filtering out** candidates sent by `myUid`.
- *
- * Returns an unsubscribe function that tears down both listeners at once.
- *
- * @param callId  The call document ID.
- * @param myUid   Your own Firebase Auth UID (used to skip self-sent candidates).
- * @param options Callbacks for the events you care about.
- */
-export function listenForSignals(
+export function listenToConnection(
   callId: string,
+  connectionId: string,
   myUid: string,
-  options: SignalListenerOptions
+  onOffer: (offer: RTCSessionDescriptionInit) => void,
+  onAnswer: (answer: RTCSessionDescriptionInit) => void,
+  onCandidate: (candidate: RTCIceCandidateInit) => void
 ): Unsubscribe {
-  const { onOffer, onAnswer, onCandidate, onStatusChange } = options;
+  let offerHandled = false;
+  let answerHandled = false;
 
-  // Dedup flags — prevent re-delivering offer/answer on every snapshot re-fire
-  let offerDelivered  = false;
-  let answerDelivered = false;
-  let lastStatus: CallStatus | null = null;
+  const unsubDoc = onSnapshot(
+    doc(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId),
+    (snap) => {
+      if (!snap.exists()) return;
+      const data = snap.data() as ConnectionDocument;
 
-  // ── 1. Watch the call document (offer / answer / status) ──────────────────
-  const unsubDoc = onSnapshot(callDocRef(callId), (snap) => {
-    if (!snap.exists()) return;
-
-    const data = snap.data() as DocumentData;
-
-    // ── Offer → only deliver to the NON-initiator, only once ──────────────
-    if (
-      onOffer &&
-      data.offer &&
-      !offerDelivered &&
-      data.initiatorUid !== myUid   // I did NOT write this offer
-    ) {
-      offerDelivered = true;
-      onOffer(data.offer as RTCSessionDescriptionInit);
-    }
-
-    // ── Answer → only deliver to the INITIATOR who wrote the offer, only once
-    if (
-      onAnswer &&
-      data.answer &&
-      !answerDelivered &&
-      data.initiatorUid === myUid   // I AM the initiator waiting for an answer
-    ) {
-      answerDelivered = true;
-      onAnswer(data.answer as RTCSessionDescriptionInit);
-    }
-
-    // ── Status change ──────────────────────────────────────────────────────
-    if (onStatusChange && data.status && data.status !== lastStatus) {
-      lastStatus = data.status as CallStatus;
-      onStatusChange(data.status as CallStatus);
-    }
-  });
-
-  // ── 2. Watch the candidates sub-collection ────────────────────────────────
-  const unsubCandidates = onSnapshot(candidatesRef(callId), (snap) => {
-    snap.docChanges().forEach((change) => {
-      if (change.type !== "added") return;
-
-      const data = change.doc.data() as CandidateDocument;
-
-      // Ignore candidates we sent ourselves
-      if (data.uid === myUid) return;
-
-      if (onCandidate && data.candidate) {
-        onCandidate(data.candidate);
+      // I am the receiver waiting for an offer
+      if (data.offer && !offerHandled && data.receiverUid === myUid) {
+        offerHandled = true;
+        onOffer(data.offer);
       }
-    });
-  });
 
-  // Return a combined unsubscribe
+      // I am the initiator waiting for an answer
+      if (data.answer && !answerHandled && data.initiatorUid === myUid) {
+        answerHandled = true;
+        onAnswer(data.answer);
+      }
+    }
+  );
+
+  const unsubCandidates = onSnapshot(
+    collection(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId, "candidates"),
+    (snap) => {
+      snap.docChanges().forEach((change) => {
+        if (change.type === "added") {
+          const data = change.doc.data() as CandidateDocument;
+          // Only process candidates from the remote peer
+          if (data.uid !== myUid && data.candidate) {
+            onCandidate(data.candidate);
+          }
+        }
+      });
+    }
+  );
+
   return () => {
     unsubDoc();
     unsubCandidates();

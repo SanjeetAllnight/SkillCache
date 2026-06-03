@@ -12,6 +12,7 @@ import { KnowledgeResourceCard } from "@/components/repository/knowledge-resourc
 import { RepositoryEmptyState } from "@/components/repository/repository-empty-state";
 import { ResourceComposer } from "@/components/repository/resource-composer";
 import { SessionRequestModal } from "@/components/sessions/session-request-modal";
+import { PostSessionFlow } from "@/components/sessions/post-session-flow";
 import { SessionStatusBadge } from "@/components/sessions/session-status-badge";
 import {
   acceptSession,
@@ -20,6 +21,9 @@ import {
   getSessionTimeLabel,
   listenSessionById,
   syncSessionLifecycle,
+  requestToJoinSession,
+  updateSessionParticipant,
+  startLiveSession,
   type ApiSession,
 } from "@/lib/firebaseServices";
 import { formatSessionDateParts } from "@/lib/view-models";
@@ -251,6 +255,8 @@ function SessionResourcesPanel({ session }: { session: ApiSession }) {
           sessionContext={{
             sessionId: session._id,
             sessionTitle: session.title,
+            sessionMentorName: session.mentor?.name ?? "Unknown",
+            sessionSkill: session.skill,
             participantIds,
           }}
           onClose={() => {
@@ -273,6 +279,7 @@ export default function SessionDetailsPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [showReschedule, setShowReschedule] = useState(false);
+  const [hidePostSession, setHidePostSession] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady || !params.id) return;
@@ -293,9 +300,11 @@ export default function SessionDetailsPage() {
         }
 
         const isParticipant =
-          nextSession.mentorId === user._id || nextSession.learnerId === user._id;
+          nextSession.mentorId === user._id || 
+          nextSession.learnerId === user._id ||
+          Boolean(nextSession.participants?.[user._id]);
 
-        if (!isParticipant) {
+        if (!isParticipant && nextSession.visibility !== "public") {
           setSession(null);
           setError("Only session participants can view this exchange.");
           setIsLoading(false);
@@ -389,14 +398,90 @@ export default function SessionDetailsPage() {
     ? session.learner.skillsWanted
     : ["Skill growth"];
   const isMentor = session.mentorId === user?._id;
-  const joinable = canJoinSession(session);
   const canReviewRequest = isMentor && session.status === "pending";
   const canReschedule =
     isMentor && ["pending", "accepted", "upcoming"].includes(session.status);
-  const canOpenCall =
-    session.status === "live" ||
-    (joinable && (session.status === "accepted" || session.status === "upcoming"));
-  const joinLabel = getJoinLabel(session, isMentor, joinable);
+
+  const participantStatus = user ? session.participants?.[user._id]?.status : undefined;
+  const isParticipant =
+    session.mentorId === user?._id ||
+    session.learnerId === user?._id ||
+    Boolean(participantStatus);
+
+  let actionButton = null;
+  const isFinished = session.status === "completed" || session.status === "cancelled" || session.status === "missed";
+  
+  if (!isFinished) {
+    if (isMentor) {
+      if (session.status === "accepted" || session.status === "upcoming" || session.status === "live") {
+        actionButton = (
+          <button
+            type="button"
+            onClick={async () => {
+              if (session.status !== "live") {
+                await startLiveSession(session._id);
+              }
+              router.push(`/call/${session._id}`);
+            }}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
+          >
+            <Icon name={session.status === "live" ? "login" : "video_call"} className="text-base" />
+            {session.status === "live" ? "Join Live Session" : "Start Session"}
+          </button>
+        );
+      }
+    } else {
+      if (session.visibility === "public" && !isParticipant) {
+        actionButton = (
+          <button
+            type="button"
+            onClick={async () => {
+              if (user) {
+                setPendingAction("join");
+                try {
+                  await requestToJoinSession(session._id, user);
+                } finally {
+                  setPendingAction(null);
+                }
+              }
+            }}
+            disabled={pendingAction === "join"}
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:opacity-60"
+          >
+            <Icon name="person_add" className="text-base" />
+            Request to Join
+          </button>
+        );
+      } else if (isParticipant) {
+        if (session.status === "pending" || participantStatus === "pending") {
+           actionButton = (
+             <button disabled className="inline-flex items-center gap-2 rounded-xl bg-surface-container px-5 py-3 text-sm font-bold text-on-surface-variant opacity-60">
+               <Icon name="hourglass_empty" className="text-base" />
+               Request Pending
+             </button>
+           );
+        } else if (session.status === "live") {
+           actionButton = (
+             <button
+               type="button"
+               onClick={() => router.push(`/call/${session._id}`)}
+               className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
+             >
+               <Icon name="login" className="text-base" />
+               Join Live Session
+             </button>
+           );
+        } else if (session.status === "accepted" || session.status === "upcoming" || participantStatus === "accepted") {
+           actionButton = (
+             <button disabled className="inline-flex items-center gap-2 rounded-xl bg-surface-container px-5 py-3 text-sm font-bold text-on-surface-variant opacity-60">
+               <Icon name="hourglass_empty" className="text-base" />
+               Waiting for mentor to start
+             </button>
+           );
+        }
+      }
+    }
+  }
 
   return (
     <div className="page-shell page-stack">
@@ -460,20 +545,7 @@ export default function SessionDetailsPage() {
                   Reschedule
                 </button>
               ) : null}
-              <button
-                type="button"
-                onClick={() => {
-                  if (session.status === "completed" || session.status === "cancelled" || session.status === "missed") {
-                    return;
-                  }
-                  if (canOpenCall) router.push(`/call/${session._id}`);
-                }}
-                disabled={!canOpenCall}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <Icon name={session.status === "live" ? "login" : "video_call"} className="text-base" />
-                {joinLabel}
-              </button>
+              {actionButton}
             </div>
           </div>
         </div>
@@ -579,22 +651,100 @@ export default function SessionDetailsPage() {
             </div>
           </section>
 
+          {isMentor && Object.entries(session.participants || {}).some(([_, p]) => p.status === "pending") && (
+            <section className="rounded-2xl bg-surface-container p-6 md:p-8">
+              <h2 className="mb-6 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-stone-400">
+                <span>Join Requests</span>
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-primary/20 text-[10px] text-primary">
+                  {Object.values(session.participants || {}).filter(p => p.status === "pending").length}
+                </span>
+              </h2>
+              <div className="space-y-4">
+                {Object.entries(session.participants || {})
+                  .filter(([_, p]) => p.status === "pending")
+                  .map(([uid, p]) => (
+                    <div key={uid} className="flex flex-col gap-3 rounded-xl bg-background/50 p-4 border border-outline-variant/10">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary-container font-bold text-xs text-on-primary-container">
+                          {p.name[0].toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-bold text-on-background">{p.name}</p>
+                          <p className="truncate text-xs text-stone-500">{p.skills?.join(", ") || "No skills listed"}</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateSessionParticipant(session._id, uid, "accepted")}
+                          className="flex-1 rounded-lg bg-primary py-2 text-xs font-bold text-on-primary transition hover:opacity-90"
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateSessionParticipant(session._id, uid, "rejected")}
+                          className="flex-1 rounded-lg bg-error/10 py-2 text-xs font-bold text-error transition hover:bg-error/20"
+                        >
+                          Reject
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </section>
+          )}
+
           <section className="rounded-2xl bg-surface-container p-6 md:p-8">
             <h2 className="mb-6 text-xs font-bold uppercase tracking-widest text-stone-400">
               Participants
             </h2>
             <div className="space-y-4">
-              {[session.mentor, session.learner].filter(Boolean).map((participant) => (
-                <div key={participant._id} className="flex items-center justify-between">
+              {/* Mentor */}
+              {session.mentor && (
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-container font-bold text-xs text-on-primary-container">
-                      {participant.name[0].toUpperCase()}
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-container font-bold text-xs text-on-primary-container">
+                      {session.mentor.name[0].toUpperCase()}
                     </div>
-                    <span className="text-sm font-bold">{participant.name}</span>
+                    <span className="text-sm font-bold text-on-background">
+                      {session.mentor.name} <span className="text-stone-500 font-normal">(Mentor)</span>
+                    </span>
                   </div>
-                  <span className="h-2 w-2 rounded-full bg-primary" />
+                  <span className="h-2 w-2 rounded-full bg-primary" title="Online" />
                 </div>
-              ))}
+              )}
+
+              {/* Private Learner OR Public Accepted Participants */}
+              {session.visibility === "public" ? (
+                Object.entries(session.participants || {})
+                  .filter(([_, p]) => p.status === "accepted")
+                  .map(([uid, p]) => (
+                    <div key={uid} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-container-high font-bold text-xs text-on-surface">
+                          {p.name[0].toUpperCase()}
+                        </div>
+                        <span className="text-sm font-bold text-on-background">{p.name}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-stone-500">Waiting</span>
+                    </div>
+                  ))
+              ) : (
+                session.learner && (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-container-high font-bold text-xs text-on-surface">
+                        {session.learner.name[0].toUpperCase()}
+                      </div>
+                      <span className="text-sm font-bold text-on-background">
+                        {session.learner.name} <span className="text-stone-500 font-normal">(Learner)</span>
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-stone-500">Waiting</span>
+                  </div>
+                )
+              )}
             </div>
           </section>
         </aside>
@@ -609,6 +759,15 @@ export default function SessionDetailsPage() {
           onSaved={() => setShowReschedule(false)}
         />
       ) : null}
+
+      {/* Post Session Completion Flow */}
+      {session && session.status === "completed" && user && !session.participants?.[user._id]?.hasRated && !hidePostSession && (
+        <PostSessionFlow
+          session={session}
+          currentUser={user}
+          onComplete={() => setHidePostSession(true)}
+        />
+      )}
     </div>
   );
 }

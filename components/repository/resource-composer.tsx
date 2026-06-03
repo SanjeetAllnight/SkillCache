@@ -18,6 +18,8 @@ import type { BackendUser } from "@/lib/mockUser";
 type SessionResourceContext = {
   sessionId: string;
   sessionTitle: string;
+  sessionMentorName: string;
+  sessionSkill: string;
   participantIds: string[];
 };
 
@@ -172,6 +174,9 @@ export function ResourceComposer({
           uploaderName: currentUser.name,
           uploaderAvatar: currentUser.avatar,
           sessionId: sessionContext?.sessionId,
+          sessionTitle: sessionContext?.sessionTitle,
+          sessionMentorName: sessionContext?.sessionMentorName,
+          sessionSkill: sessionContext?.sessionSkill,
           sessionParticipantIds: sessionContext?.participantIds,
         },
         setUploadProgress,

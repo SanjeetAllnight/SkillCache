@@ -62,6 +62,9 @@ export type FirestoreResourceDocument = {
   tags: string[];
   tagSlugs: string[];
   sessionId?: string | null;
+  sessionTitle?: string;
+  sessionMentorName?: string;
+  sessionSkill?: string;
   sessionParticipantIds?: string[];
   fileUrl?: string;
   storagePath?: string;
@@ -106,6 +109,9 @@ export type CreateResourceInput = {
   tags: string[];
   visibility: ResourceVisibility;
   sessionId?: string | null;
+  sessionTitle?: string;
+  sessionMentorName?: string;
+  sessionSkill?: string;
   sessionParticipantIds?: string[];
   file?: File | null;
   externalUrl?: string;
@@ -214,6 +220,9 @@ function buildSearchText(input: {
   type: ResourceType;
   content?: string;
   externalUrl?: string;
+  sessionTitle?: string;
+  sessionMentorName?: string;
+  sessionSkill?: string;
 }) {
   return [
     input.title,
@@ -223,6 +232,9 @@ function buildSearchText(input: {
     input.type,
     input.content?.slice(0, 500),
     input.externalUrl,
+    input.sessionTitle,
+    input.sessionMentorName,
+    input.sessionSkill,
   ]
     .filter(Boolean)
     .join(" ")
@@ -394,6 +406,9 @@ export function buildOptimisticResource(
       type,
       content: input.content,
       externalUrl: input.externalUrl,
+      sessionTitle: input.sessionTitle,
+      sessionMentorName: input.sessionMentorName,
+      sessionSkill: input.sessionSkill,
     }),
     createdAt: nowMillis,
     updatedAt: nowMillis,
@@ -487,6 +502,9 @@ export async function createKnowledgeResource(
     tags,
     tagSlugs: tags.map(tagSlug),
     sessionId: input.sessionId ?? null,
+    sessionTitle: input.sessionTitle ?? undefined,
+    sessionMentorName: input.sessionMentorName ?? undefined,
+    sessionSkill: input.sessionSkill ?? undefined,
     sessionParticipantIds: input.sessionParticipantIds ?? [],
     externalUrl: input.type === "link" ? input.externalUrl?.trim() : undefined,
     content: input.content?.trim() || undefined,

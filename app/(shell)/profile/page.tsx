@@ -9,7 +9,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tag } from "@/components/ui/tag";
 import { SkillCard } from "@/components/skills/skill-card";
 import { SkillModal } from "@/components/skills/skill-modal";
-import { SkillImporter } from "@/components/skills/skill-importer";
 import type { SkillFormData } from "@/components/skills/skill-modal";
 import { ToastPortal, pushToast } from "@/components/skills/toast";
 import type { ToastData } from "@/components/skills/toast";
@@ -248,49 +247,6 @@ export default function ProfilePage() {
     setModalOpen(true);
   }
 
-  // ── AI Import ───────────────────────────────────────────────────────────────
-  const handleAiImport = useCallback(
-    async (importedOffered: string[], importedWanted: string[], importedBio: string) => {
-      if (!user?._id || !profile) return;
-      
-      const newOffered = Array.from(new Set([...(profile.skillsOffered || []), ...importedOffered]));
-      const newWanted = Array.from(new Set([...(profile.skillsWanted || []), ...importedWanted]));
-      const newBio = importedBio || profile.bio || "";
-
-      try {
-        await updateUserProfile(user._id, {
-          skillsOffered: newOffered,
-          skillsWanted: newWanted,
-          bio: newBio,
-        });
-
-        // Add subcollection docs for each new skill so they show up in The Arsenal
-        const ops = [];
-        for (const s of importedOffered) {
-          if (!profile.skillsOffered?.includes(s)) {
-            ops.push(addSkill(user._id, { name: s, type: "teaching", level: "Intermediate", description: "Imported via AI Analysis" }));
-          }
-        }
-        for (const s of importedWanted) {
-          if (!profile.skillsWanted?.includes(s)) {
-            ops.push(addSkill(user._id, { name: s, type: "learning", level: "Beginner", description: "Imported via AI Analysis" }));
-          }
-        }
-        await Promise.all(ops);
-
-        setProfile((prev) => prev ? { ...prev, bio: newBio, skillsOffered: newOffered, skillsWanted: newWanted } : prev);
-        setEditBio(newBio);
-        setEditOffered(newOffered.join(", "));
-        setEditWanted(newWanted.join(", "));
-        
-        setToasts((prev) => pushToast(prev, "AI Import applied successfully!"));
-      } catch (err) {
-        setToasts((prev) => pushToast(prev, (err as Error).message || "Import failed.", "error"));
-      }
-    },
-    [user, profile]
-  );
-
   // ── Loading skeleton ─────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -422,8 +378,6 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
-          
-          {isOwnProfile && <SkillImporter onImportComplete={handleAiImport} />}
         </section>
 
         {/* ── Success banner ───────────────────────────────────────────────── */}

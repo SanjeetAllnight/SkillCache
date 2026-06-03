@@ -11,6 +11,7 @@ import {
   setDoc,
   updateDoc,
   addDoc,
+  writeBatch,
   type FieldValue,
   type Unsubscribe,
 } from "firebase/firestore";
@@ -77,6 +78,19 @@ export type FirestoreSession = {
   /** Real-time call state — written by participants during a call. */
   callStatus?: CallStatus;
   isSeeded?: boolean;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
+  participants?: Record<
+    string,
+    {
+      name: string;
+      skills: string[];
+      status: "pending" | "accepted" | "rejected";
+      hasRated?: boolean;
+    }
+  >;
 };
 
 export type ApiSession = {
@@ -98,6 +112,19 @@ export type ApiSession = {
   /** Real-time call state — present once a call has been initiated. */
   callStatus?: CallStatus;
   isSeeded?: boolean;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
+  participants?: Record<
+    string,
+    {
+      name: string;
+      skills: string[];
+      status: "pending" | "accepted" | "rejected";
+      hasRated?: boolean;
+    }
+  >;
 };
 
 export type FirestoreResource = {
@@ -219,6 +246,11 @@ function toApiSession(
     rescheduleNote: data.rescheduleNote,
     callStatus: data.callStatus,
     isSeeded: data.isSeeded,
+    sessionType: data.sessionType,
+    maxParticipants: data.maxParticipants,
+    visibility: data.visibility,
+    durationMinutes: data.durationMinutes,
+    participants: data.participants,
   };
 }
 
@@ -403,6 +435,10 @@ export async function createSession(
     date: string;
     status: SessionStatus;
     requestedBy?: string;
+    sessionType?: "private" | "public";
+    maxParticipants?: number;
+    visibility?: "private" | "public";
+    durationMinutes?: number;
   }
 ): Promise<string> {
   const docRef = await addDoc(sessionsCollection, {
@@ -421,6 +457,10 @@ export async function requestSession(data: {
   learnerId: string;
   skill: string;
   date: string;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
 }): Promise<string> {
   return createSession({
     ...data,
@@ -517,6 +557,77 @@ export async function acceptSession(sessionId: string): Promise<void> {
     callStatus: "idle",
     updatedAt: serverTimestamp(),
   });
+}
+
+export async function startLiveSession(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "live",
+    startedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function endLiveSession(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "completed",
+    completedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function requestToJoinSession(sessionId: string, user: BackendUser): Promise<void> {
+  await setDoc(
+    doc(db, "sessions", sessionId),
+    {
+      participants: {
+        [user._id]: {
+          name: user.name,
+          skills: user.skillsWanted || [],
+          status: "pending",
+        },
+      },
+    },
+    { merge: true }
+  );
+}
+
+export async function updateSessionParticipant(
+  sessionId: string,
+  userId: string,
+  status: "accepted" | "rejected"
+): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    [`participants.${userId}.status`]: status,
+  });
+}
+
+export type SessionRatingData = {
+  sessionId: string;
+  mentorId: string;
+  learnerId: string;
+  mentorRating: number;
+  sessionRating: number;
+  feedback?: string;
+};
+
+export async function submitSessionRating(userId: string, data: SessionRatingData): Promise<void> {
+  const batch = writeBatch(db);
+  
+  // 1. Create rating doc
+  const ratingRef = doc(collection(db, "session_ratings"));
+  batch.set(ratingRef, {
+    ...data,
+    reviewerId: userId,
+    createdAt: serverTimestamp(),
+  });
+
+  // 2. Mark participant as having rated
+  const sessionRef = doc(db, "sessions", data.sessionId);
+  batch.update(sessionRef, {
+    [`participants.${userId}.hasRated`]: true,
+  });
+
+  await batch.commit();
 }
 
 export async function cancelSession(
@@ -668,6 +779,32 @@ export function listenSessionsForUser(
     unsubscribeMentor();
     unsubscribeLearner();
   };
+}
+
+export function listenPublicSessions(
+  onChange: (sessions: ApiSession[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  let cancelled = false;
+  const usersPromise = getUsers()
+    .then((users) => new Map(users.map((user) => [user._id, user])))
+    .catch(() => new Map<string, BackendUser>());
+
+  return onSnapshot(
+    query(sessionsCollection, where("sessionType", "==", "public")),
+    async (snapshot) => {
+      const usersMap = await usersPromise;
+      if (cancelled) return;
+      
+      const sessions = snapshot.docs
+        .map((d) => toApiSession(d.id, d.data() as FirestoreSession, usersMap))
+        .filter((s): s is ApiSession => Boolean(s))
+        .sort(sortSessionsDescending);
+        
+      onChange(sessions);
+    },
+    (error) => onError?.(error),
+  );
 }
 
 export function listenSessionById(

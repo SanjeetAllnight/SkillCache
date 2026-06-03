@@ -163,6 +163,15 @@ export function KnowledgeResourceCard({
         </div>
       ) : null}
 
+      {resource.sessionTitle && resource.sessionMentorName && (
+        <div className="mt-4 flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400">
+          <Icon name="groups" className="text-sm" />
+          <p className="text-[11px] font-bold uppercase tracking-widest">
+            From Session: <span className="font-semibold text-emerald-700 dark:text-emerald-300">{resource.sessionTitle}</span> with {resource.sessionMentorName}
+          </p>
+        </div>
+      )}
+
       <div className="mt-5 flex flex-wrap gap-2">
         {resource.tags.slice(0, compact ? 3 : 5).map((tag) => (
           <span
