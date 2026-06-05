@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -560,12 +561,14 @@ export default function SessionDetailsPage() {
                   Mentor
                 </h2>
                 <div className="flex items-center gap-4">
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-container font-headline text-2xl font-bold text-on-primary-container">
+                  <Link href={`/profile?mentor=${session.mentorId}`} className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-container font-headline text-2xl font-bold text-on-primary-container transition hover:scale-105">
                     {(session.mentor?.name ?? "M")[0].toUpperCase()}
-                  </div>
+                  </Link>
                   <div>
-                    <p className="text-xl font-bold text-on-background">
-                      {session.mentor?.name ?? "Unknown Mentor"}
+                    <p className="text-xl font-bold text-on-background hover:underline">
+                      <Link href={`/profile?mentor=${session.mentorId}`}>
+                        {session.mentor?.name ?? "Unknown Mentor"}
+                      </Link>
                     </p>
                     <p className="text-sm text-stone-500">
                       {mentorSkills.join(" • ")}
@@ -573,6 +576,27 @@ export default function SessionDetailsPage() {
                   </div>
                 </div>
               </div>
+
+              {session.visibility === "public" ? (
+                <div className="space-y-6">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+                    Workshop Details
+                  </h2>
+                  <div className="flex items-center gap-4">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-container text-primary">
+                      <Icon name="event_seat" className="text-2xl" />
+                    </div>
+                    <div>
+                      <p className="text-xl font-bold text-on-background">
+                        {session.durationMinutes ?? 30} Minutes
+                      </p>
+                      <p className="text-sm text-stone-500">
+                        {Math.max(0, (session.maxParticipants ?? 10) - 1 - Object.values(session.participants || {}).filter(p => p.status === "accepted").length)} seats remaining
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="space-y-6">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">

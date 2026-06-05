@@ -15,6 +15,7 @@ import type { ToastData } from "@/components/skills/toast";
 import { StarBadge } from "@/components/reviews/star-rating";
 import { ReviewsSection } from "@/components/reviews/reviews-section";
 import { useAuth } from "@/components/providers/auth-provider";
+import { EditProfileModal } from "@/components/profile/edit-profile-modal";
 import {
   getUserById,
   updateUserProfile,
@@ -49,11 +50,16 @@ function paletteFor(name: string) {
     h = ((h << 5) - h + name.charCodeAt(i)) | 0;
   return PALETTE[Math.abs(h) % PALETTE.length];
 }
-function parseComma(s: string) {
-  return s
-    .split(",")
-    .map((x) => x.trim())
-    .filter(Boolean);
+
+function calculateProfileCompleteness(profile: BackendUser | null) {
+  if (!profile) return 0;
+  let score = 0;
+  if (profile.name) score += 20;
+  if (profile.bio) score += 20;
+  if (profile.location) score += 20;
+  if (profile.avatar) score += 20;
+  if ((profile.skillsOffered?.length ?? 0) > 0 || (profile.skillsWanted?.length ?? 0) > 0) score += 20;
+  return score;
 }
 
 // ─── Badge definitions ────────────────────────────────────────────────────────
@@ -85,14 +91,8 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Bio editing
-  const [editing, setEditing]         = useState(false);
-  const [editName, setEditName]       = useState("");
-  const [editBio, setEditBio]         = useState("");
-  const [editOffered, setEditOffered] = useState("");
-  const [editWanted, setEditWanted]   = useState("");
-  const [saving, setSaving]           = useState(false);
-  const [saveError, setSaveError]     = useState<string | null>(null);
+  // Edit profile modal
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   // Skills
@@ -127,13 +127,6 @@ export default function ProfilePage() {
         if (!mounted) return;
         setProfile(data);
         setRatingMeta(meta);
-        
-        if (isOwnProfile && data) {
-          setEditName(data.name ?? "");
-          setEditBio(data.bio ?? "");
-          setEditOffered((data.skillsOffered ?? []).join(", "));
-          setEditWanted((data.skillsWanted ?? []).join(", "));
-        }
       } catch (err) {
         if (!mounted) return;
         setLoadError((err as Error).message);
@@ -173,36 +166,29 @@ export default function ProfilePage() {
     };
   }, [displayUid, isOwnProfile, user?._id]);
 
-  // ── Bio save ────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
+  // ── Profile save ────────────────────────────────────────────────────────────
+  const handleProfileSave = useCallback(async (data: any) => {
     if (!user?._id) return;
-    setSaving(true);
-    setSaveError(null);
     setSaveSuccess(false);
-    try {
-      await updateUserProfile(user._id, {
-        skillsOffered: parseComma(editOffered),
-        skillsWanted:  parseComma(editWanted),
-        bio:           editBio.trim(),
-      });
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              bio:          editBio.trim(),
-              skillsOffered: parseComma(editOffered),
-              skillsWanted:  parseComma(editWanted),
-            }
-          : prev,
-      );
-      setSaveSuccess(true);
-      setEditing(false);
-    } catch (err) {
-      setSaveError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }, [user, editBio, editOffered, editWanted]);
+    await updateUserProfile(user._id, {
+      name: data.name,
+      bio: data.bio,
+      location: data.location,
+      emailVisibility: data.emailVisibility,
+      avatar: data.avatar,
+      skillsOffered: data.skillsOffered,
+      skillsWanted: data.skillsWanted,
+    });
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            ...data,
+          }
+        : prev,
+    );
+    setSaveSuccess(true);
+  }, [user]);
 
   // ── Skill CRUD ──────────────────────────────────────────────────────────────
   const handleSkillSave = useCallback(
@@ -287,100 +273,135 @@ export default function ProfilePage() {
   const offeredSkills  = profile.skillsOffered ?? [];
   const wantedSkills   = profile.skillsWanted  ?? [];
   const bio            = profile.bio ?? "";
+  const location       = profile.location ?? "";
 
   const teachingSkills = skills.filter((s) => s.type === "teaching");
   const learningSkills = skills.filter((s) => s.type === "learning");
+  
+  const memberSinceStr = profile.createdAt 
+    ? new Date(profile.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : "Recently joined";
+    
+  const profileCompleteness = calculateProfileCompleteness(profile);
 
   return (
     <>
-      {/* ── Skill modal ────────────────────────────────────────────────────── */}
       <SkillModal
         isOpen={modalOpen}
         editingSkill={editingSkill}
         onClose={() => setModalOpen(false)}
         onSave={handleSkillSave}
       />
+      
+      <EditProfileModal
+        isOpen={editProfileOpen}
+        profile={profile}
+        onClose={() => setEditProfileOpen(false)}
+        onSave={handleProfileSave}
+      />
 
-      {/* ── Toast portal ───────────────────────────────────────────────────── */}
       <ToastPortal
         toasts={toasts}
         onDismiss={(id) => setToasts((prev) => prev.filter((t) => t.id !== id))}
       />
 
       <div className="page-shell page-stack">
-
-        {/* ── Cover + avatar header ────────────────────────────────────────── */}
         <section className="section-stack">
           <div className="relative">
-            {/* Cover gradient */}
             <div className="relative h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-primary/30 via-secondary/20 to-tertiary/30 md:h-72">
               <div className="absolute inset-0 bg-gradient-to-tr from-primary/10 to-transparent" />
-              {/* Decorative monogram */}
               <div className="pointer-events-none absolute -right-10 -top-10 font-headline text-[160px] font-black leading-none tracking-tighter text-white/5 select-none">
                 {avatarInitials}
               </div>
             </div>
 
-            {/* Avatar + name */}
             <div className="relative -mt-10 flex flex-col gap-4 px-5 sm:px-6 md:-mt-14 md:flex-row md:items-end md:px-8 lg:px-10">
-              <div
-                className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-surface font-headline text-4xl font-black shadow-xl md:h-40 md:w-40 md:text-5xl ${avatarPalette}`}
-              >
-                {avatarInitials}
-              </div>
-
-              <div className="flex flex-1 flex-col justify-end gap-3 pb-2 md:flex-row md:items-end md:justify-between">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h1 className="font-headline text-3xl font-black tracking-tighter text-on-surface md:text-5xl">
-                      {profile.name}
-                    </h1>
-                    <Icon name="verified" filled className="text-primary" />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-sm font-medium text-stone-500">
-                      {offeredSkills.length > 0
-                        ? offeredSkills[0] + " Mentor · Remote"
-                        : "SkillCache Member · Remote"}
-                    </p>
-                    {ratingMeta && ratingMeta.totalReviews > 0 && (
-                      <>
-                        <span className="text-stone-300">·</span>
-                        <StarBadge rating={ratingMeta.averageRating} totalReviews={ratingMeta.totalReviews} size="sm" />
-                      </>
-                    )}
-                  </div>
+              {profile.avatar ? (
+                <div
+                  className="flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-surface shadow-xl md:h-40 md:w-40 bg-surface bg-cover bg-center"
+                  style={{ backgroundImage: `url(${profile.avatar})` }}
+                />
+              ) : (
+                <div
+                  className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-surface font-headline text-4xl font-black shadow-xl md:h-40 md:w-40 md:text-5xl ${avatarPalette}`}
+                >
+                  {avatarInitials}
                 </div>
+              )}
 
-                {/* Edit profile / Add Skill buttons — own profile only */}
-                {isOwnProfile && !editing && (
-                  <div className="flex flex-wrap items-center gap-2 self-start md:self-auto">
-                    <button
-                      id="btn-add-skill"
-                      type="button"
-                      onClick={openAdd}
-                      className="flex items-center gap-2 self-start rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-on-primary shadow-editorial transition hover:opacity-90 md:self-auto"
-                    >
-                      <Icon name="add" className="text-sm" />
-                      Add Skill
-                    </button>
-                    <button
-                      id="btn-edit-profile"
-                      type="button"
-                      onClick={() => { setEditing(true); setSaveSuccess(false); }}
-                      className="flex items-center gap-2 self-start rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2 text-sm font-semibold text-on-surface transition hover:bg-surface-container-high md:self-auto"
-                    >
-                      <Icon name="edit" className="text-sm" />
-                      Edit Profile
-                    </button>
+              <div className="flex flex-1 flex-col justify-end gap-4 pb-2">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  <div className="space-y-3 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h1 className="font-headline text-3xl font-black tracking-tighter text-on-surface md:text-5xl">
+                        {profile.name}
+                      </h1>
+                      <Icon name="verified" filled className="text-primary" />
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
+                      <span className="font-medium text-primary">
+                        {offeredSkills.length > 0
+                          ? offeredSkills[0] + " Mentor"
+                          : "SkillCache Member"}
+                      </span>
+                      
+                      {location && (
+                        <span className="flex items-center gap-1 text-stone-500">
+                          <Icon name="location_on" className="text-[15px]" />
+                          {location}
+                        </span>
+                      )}
+                      
+                      <span className="flex items-center gap-1 text-stone-500">
+                        <Icon name="calendar_today" className="text-[15px]" />
+                        Member since {memberSinceStr}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 pt-1">
+                      {ratingMeta && ratingMeta.totalReviews > 0 ? (
+                        <StarBadge rating={ratingMeta.averageRating} totalReviews={ratingMeta.totalReviews} size="md" />
+                      ) : (
+                        <span className="text-xs font-bold uppercase tracking-widest text-stone-400">No reviews yet</span>
+                      )}
+                      <span className="h-4 w-[1px] bg-outline-variant/50 hidden md:block" />
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-stone-600">
+                        <Icon name="forum" className="text-stone-400" />
+                        {profile.sessionsCompleted || 0} Sessions
+                      </div>
+                      <span className="h-4 w-[1px] bg-outline-variant/50 hidden md:block" />
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-stone-600">
+                        <Icon name="school" className="text-stone-400" />
+                        {teachingSkills.length} Taught
+                      </div>
+                      <span className="h-4 w-[1px] bg-outline-variant/50 hidden md:block" />
+                      <div className="flex items-center gap-1.5 text-sm font-medium text-stone-600">
+                        <Icon name="auto_stories" className="text-stone-400" />
+                        {learningSkills.length} Learned
+                      </div>
+                    </div>
                   </div>
-                )}
+
+                  {isOwnProfile && (
+                    <div className="flex shrink-0 gap-2 self-start">
+                      <button
+                        id="btn-edit-profile"
+                        type="button"
+                        onClick={() => { setEditProfileOpen(true); setSaveSuccess(false); }}
+                        className="flex items-center gap-2 rounded-xl border border-outline-variant/30 bg-surface-container px-5 py-2.5 text-sm font-bold text-on-surface transition hover:bg-surface-container-high shadow-editorial"
+                      >
+                        <Icon name="edit" className="text-sm" />
+                        Edit Profile
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
         </section>
 
-        {/* ── Success banner ───────────────────────────────────────────────── */}
         {saveSuccess && (
           <div className="flex items-center gap-2 rounded-xl border border-primary/20 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
             <Icon name="check_circle" filled className="text-base" />
@@ -388,65 +409,68 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* ── Main 2-col layout ────────────────────────────────────────────── */}
         <div className="grid gap-10 xl:grid-cols-12">
-
-          {/* ── Left sidebar ─────────────────────────────────────────────── */}
           <aside className="space-y-10 xl:col-span-4">
+            
+            {/* Completeness indicator */}
+            {isOwnProfile && profileCompleteness < 100 && (
+              <section className="rounded-2xl border border-primary/20 bg-primary/5 p-5">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-bold text-primary">Profile Completeness</h3>
+                  <span className="text-sm font-bold text-primary">{profileCompleteness}%</span>
+                </div>
+                <div className="h-2 w-full overflow-hidden rounded-full bg-primary/20">
+                  <div 
+                    className="h-full bg-primary transition-all duration-500 ease-out" 
+                    style={{ width: `${profileCompleteness}%` }}
+                  />
+                </div>
+                <p className="mt-3 text-xs text-primary/80">
+                  A complete profile helps you stand out to mentors and learners. 
+                  <button 
+                    onClick={() => setEditProfileOpen(true)} 
+                    className="ml-1 underline font-bold"
+                  >
+                    Complete it now
+                  </button>
+                </p>
+              </section>
+            )}
 
-            {/* Bio */}
             <section className="section-stack">
               <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
                 About
               </h2>
-              {editing ? (
-                <textarea
-                  id="edit-bio"
-                  value={editBio}
-                  onChange={(e) => setEditBio(e.target.value)}
-                  maxLength={400}
-                  rows={5}
-                  placeholder="Tell the community about yourself…"
-                  className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              ) : (
-                <p className="text-base leading-relaxed text-on-surface-variant">
-                  {bio || (
-                    <span className="italic text-stone-500">
-                      {isOwnProfile
-                        ? "No bio yet — click Edit Profile to add one."
-                        : "No bio provided."}
-                    </span>
-                  )}
-                </p>
-              )}
+              <p className="text-base leading-relaxed text-on-surface-variant whitespace-pre-wrap">
+                {bio || (
+                  <span className="italic text-stone-500">
+                    {isOwnProfile
+                      ? "No bio yet — click Edit Profile to add one."
+                      : "No bio provided."}
+                  </span>
+                )}
+              </p>
             </section>
 
-            {/* Teaching skills — derived from sub-collection */}
             <section className="app-card-soft space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
                   Teaching
                 </h2>
-                {isOwnProfile && !editing && (
-                  <button
-                    type="button"
-                    onClick={openAdd}
-                    className="flex items-center gap-1 text-[11px] font-bold text-primary hover:opacity-75 transition-opacity"
-                  >
-                    <span className="material-symbols-outlined text-[13px] leading-none">add</span>
-                    Add
-                  </button>
-                )}
               </div>
               {skillsLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-6 w-24" />
                   <Skeleton className="h-6 w-20" />
                 </div>
-              ) : teachingSkills.length > 0 ? (
+              ) : teachingSkills.length > 0 || offeredSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {teachingSkills.map((s) => (
+                  {offeredSkills.map((s) => (
+                    <Tag key={s} className="px-3 py-1 text-xs normal-case font-bold bg-primary-container/60">
+                      {s}
+                    </Tag>
+                  ))}
+                  {teachingSkills.filter(ts => !offeredSkills.includes(ts.name)).map((s) => (
                     <Tag key={s._id} className="px-3 py-1 text-xs normal-case">
                       {s.name}
                     </Tag>
@@ -454,40 +478,31 @@ export default function ProfilePage() {
                 </div>
               ) : (
                 <p className="text-sm italic text-stone-400">
-                  {isOwnProfile ? "Add skills to teach others." : "No skills listed."}
+                  {isOwnProfile ? "Add skills to teach in Edit Profile." : "No skills listed."}
                 </p>
               )}
             </section>
 
-            {/* Learning skills — derived from sub-collection */}
             <section className="app-card-soft space-y-4">
               <div className="flex items-center justify-between">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
                   Learning
                 </h2>
-                {isOwnProfile && !editing && (
-                  <button
-                    type="button"
-                    onClick={openAdd}
-                    className="flex items-center gap-1 text-[11px] font-bold text-secondary hover:opacity-75 transition-opacity"
-                  >
-                    <span className="material-symbols-outlined text-[13px] leading-none">add</span>
-                    Add
-                  </button>
-                )}
               </div>
               {skillsLoading ? (
                 <div className="space-y-2">
                   <Skeleton className="h-6 w-28" />
                   <Skeleton className="h-6 w-16" />
                 </div>
-              ) : learningSkills.length > 0 ? (
+              ) : learningSkills.length > 0 || wantedSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
-                  {learningSkills.map((s) => (
-                    <Tag
-                      key={s._id}
-                      className="px-3 py-1 text-xs normal-case bg-secondary-container/30"
-                    >
+                  {wantedSkills.map((s) => (
+                    <Tag key={s} className="px-3 py-1 text-xs normal-case font-bold bg-secondary-container/60">
+                      {s}
+                    </Tag>
+                  ))}
+                  {learningSkills.filter(ls => !wantedSkills.includes(ls.name)).map((s) => (
+                    <Tag key={s._id} className="px-3 py-1 text-xs normal-case bg-surface-container-high border-outline-variant/50">
                       {s.name}
                     </Tag>
                   ))}
@@ -495,67 +510,33 @@ export default function ProfilePage() {
               ) : (
                 <p className="text-sm italic text-stone-400">
                   {isOwnProfile
-                    ? "Add skills you want to learn."
+                    ? "Add learning goals in Edit Profile."
                     : "No learning goals listed."}
                 </p>
               )}
             </section>
 
-            {/* Email — own profile only */}
-            {isOwnProfile && (
+            {(profile.emailVisibility === "public" || isOwnProfile) && (
               <section className="section-stack">
-                <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
-                  Contact
-                </h2>
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
+                    Contact
+                  </h2>
+                  {isOwnProfile && profile.emailVisibility === "private" && (
+                    <span className="text-[10px] uppercase font-bold text-stone-400 flex items-center gap-1">
+                      <Icon name="lock" className="text-[12px]" /> Private
+                    </span>
+                  )}
+                </div>
                 <div className="flex items-center gap-2 text-sm text-on-surface-variant">
                   <Icon name="alternate_email" className="text-primary" />
                   {profile.email}
                 </div>
               </section>
             )}
-
-            {/* Save / cancel bio editing */}
-            {isOwnProfile && editing && (
-              <div className="flex flex-col gap-3">
-                {saveError && (
-                  <p className="rounded-xl bg-error/10 px-4 py-2 text-sm text-error">
-                    {saveError}
-                  </p>
-                )}
-                <button
-                  id="btn-save-profile"
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:opacity-60"
-                >
-                  {saving ? (
-                    <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                    </svg>
-                  ) : (
-                    <Icon name="save" className="text-base" />
-                  )}
-                  {saving ? "Saving…" : "Save Changes"}
-                </button>
-                <button
-                  id="btn-cancel-edit"
-                  type="button"
-                  onClick={() => { setEditing(false); setSaveError(null); }}
-                  disabled={saving}
-                  className="text-center text-sm text-stone-400 underline underline-offset-2 transition hover:text-stone-600"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
           </aside>
 
-          {/* ── Right main column ───────────────────────────────────────── */}
           <div className="min-w-0 space-y-10 xl:col-span-8">
-
-            {/* ── Skill cards — "The Arsenal" ──────────────────────────── */}
             <section className="section-stack">
               <div className="flex items-center justify-between gap-4">
                 <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
@@ -566,7 +547,7 @@ export default function ProfilePage() {
                     id="btn-add-skill-arsenal"
                     type="button"
                     onClick={openAdd}
-                    className="flex items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container px-3 py-1.5 text-xs font-bold text-on-surface transition hover:bg-surface-container-high"
+                    className="flex items-center gap-1.5 rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2 text-xs font-bold text-on-surface transition hover:bg-surface-container-high shadow-editorial"
                   >
                     <span className="material-symbols-outlined text-sm leading-none">add</span>
                     Manage Skills
@@ -594,19 +575,19 @@ export default function ProfilePage() {
                   ))}
                 </div>
               ) : (
-                <div className="rounded-2xl border border-dashed border-outline-variant/30 p-8 text-center">
-                  <span className="material-symbols-outlined mb-2 text-4xl text-stone-300">
+                <div className="rounded-2xl border border-dashed border-outline-variant/30 p-10 text-center">
+                  <span className="material-symbols-outlined mb-2 text-5xl text-stone-300">
                     add_circle
                   </span>
                   {isOwnProfile ? (
                     <>
-                      <p className="mb-4 text-sm text-stone-400">
-                        You haven&apos;t added any skills yet. Start building your arsenal!
+                      <p className="mb-6 text-sm text-stone-400 max-w-sm mx-auto">
+                        Your arsenal is empty. Add detailed skill cards to show off your expertise and experience levels.
                       </p>
                       <button
                         type="button"
                         onClick={openAdd}
-                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-on-primary transition hover:opacity-90"
+                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 shadow-editorial"
                       >
                         <span className="material-symbols-outlined text-base leading-none">add</span>
                         Add Your First Skill
@@ -619,7 +600,6 @@ export default function ProfilePage() {
               )}
             </section>
 
-            {/* ── Accolades / badges ───────────────────────────────────── */}
             <section className="section-stack">
               <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
                 Accolades
@@ -654,7 +634,6 @@ export default function ProfilePage() {
               </div>
             </section>
 
-            {/* ── CTA section ─────────────────────────────────────────── */}
             <section className="relative overflow-hidden rounded-2xl bg-surface-container p-6 md:p-12">
               <div className="pointer-events-none absolute right-0 top-0 h-full w-1/3 opacity-10">
                 <Icon
@@ -680,7 +659,7 @@ export default function ProfilePage() {
                 </p>
                 <div className="flex flex-wrap items-center gap-4">
                   <Button
-                    href={isOwnProfile ? "/mentors" : "/sessions"}
+                    href={isOwnProfile ? "/mentors" : `/sessions?request=true&mentorId=${profile._id}`}
                     variant="solid"
                     rounded="xl"
                   >
@@ -691,7 +670,6 @@ export default function ProfilePage() {
               </div>
             </section>
 
-            {/* ── Reviews Section ── */}
             <ReviewsSection
               mentor={profile}
               viewer={user}

@@ -47,7 +47,8 @@ export function toMentorCardData(mentors: BackendUser[]): MentorCardData[] {
           ? `Sharing ${offeredSkills.join(", ")} while exploring ${wantedSkills.join(", ")} through focused exchange.`
           : `Open for guided mentorship in ${offeredSkills.join(", ")} and collaborative skill exchange.`,
       tags: offeredSkills,
-      rating: "5.0",       // placeholder until we track actual ratings
+      averageRating: mentor.averageRating ?? 0,
+      totalReviews: mentor.totalReviews ?? 0,
       image: "",           // intentionally empty — MentorCard renders initials
       location: "Remote",
       profileHref: `/profile?mentor=${mentor._id}`,

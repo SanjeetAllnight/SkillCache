@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { SessionLifecycleCard } from "@/components/sessions/session-lifecycle-card";
 import { SessionRequestModal } from "@/components/sessions/session-request-modal";
@@ -79,13 +79,25 @@ function SessionSection({
 
 export default function SessionsPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthReady } = useAuth();
   const [sessions, setSessions] = useState<ApiSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showRequestModal, setShowRequestModal] = useState(false);
+  
+  const initialRequest = searchParams.get("request") === "true";
+  const initialMentorId = searchParams.get("mentorId") || undefined;
+  
+  const [showRequestModal, setShowRequestModal] = useState(initialRequest);
   const [reschedulingSession, setReschedulingSession] = useState<ApiSession | null>(null);
   const [pendingActionId, setPendingActionId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialRequest) {
+      // Clear URL params without triggering a full page navigation
+      window.history.replaceState(null, "", "/sessions");
+    }
+  }, [initialRequest]);
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -338,6 +350,7 @@ export default function SessionsPage() {
       {showRequestModal && user ? (
         <SessionRequestModal
           currentUser={user}
+          initialMentorId={initialMentorId}
           onClose={() => setShowRequestModal(false)}
           onSaved={handleSaved}
         />

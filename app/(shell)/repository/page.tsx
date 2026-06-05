@@ -86,7 +86,7 @@ function emptyStateFor(view: RepositoryView, hasFilters: boolean) {
 
   return {
     title: "No learning resources yet",
-    description: "Start the shared library with a note, link, snippet, PDF, or session takeaway.",
+    description: "Be the first contributor to share a learning resource.",
     actionLabel: "Share Resource",
     icon: "auto_stories",
   };

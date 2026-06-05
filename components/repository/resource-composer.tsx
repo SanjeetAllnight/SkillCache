@@ -91,7 +91,9 @@ export function ResourceComposer({
   const [saving, setSaving] = useState(false);
   const [slowUpload, setSlowUpload] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const slowUploadTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -109,7 +111,9 @@ export function ResourceComposer({
     setSaving(false);
     setSlowUpload(false);
     setError(null);
+    setSuccess(null);
     if (slowUploadTimerRef.current) clearTimeout(slowUploadTimerRef.current);
+    if (abortControllerRef.current) abortControllerRef.current.abort();
   }, [open, initialResource, sessionContext]);
 
   const selectedType = useMemo(
@@ -124,9 +128,16 @@ export function ResourceComposer({
 
   const handleFileChange = useCallback((nextFile: File | null) => {
     setError(null);
-    setFile(null);
-
-    if (!nextFile) return;
+    setSuccess(null);
+    
+    if (!nextFile) {
+      if (saving) {
+        abortControllerRef.current?.abort();
+        setSaving(false);
+      }
+      setFile(null);
+      return;
+    }
 
     try {
       validateResourceFile(nextFile);
@@ -144,6 +155,9 @@ export function ResourceComposer({
     setSaving(true);
     setSlowUpload(false);
     setError(null);
+    setSuccess(null);
+    
+    abortControllerRef.current = new AbortController();
 
     // Show a hint if the upload takes > 20 seconds
     slowUploadTimerRef.current = setTimeout(() => setSlowUpload(true), 20_000);
@@ -180,10 +194,16 @@ export function ResourceComposer({
           sessionParticipantIds: sessionContext?.participantIds,
         },
         setUploadProgress,
+        abortControllerRef.current.signal,
       );
 
-      onSaved(resource);
+      setSuccess("Resource shared successfully!");
+      setTimeout(() => onSaved(resource), 1500);
     } catch (submitError) {
+      if (abortControllerRef.current?.signal.aborted) {
+        setError("Upload canceled.");
+        return;
+      }
       setError(
         submitError instanceof Error
           ? submitError.message
@@ -199,6 +219,14 @@ export function ResourceComposer({
     externalUrl, content, codeLanguage, currentUser, file, sessionContext, onSaved,
   ]);
 
+  const handleClose = useCallback(() => {
+    if (saving) {
+      abortControllerRef.current?.abort();
+      setSaving(false);
+    }
+    onClose();
+  }, [saving, onClose]);
+
   if (!open) return null;
 
   return (
@@ -207,7 +235,7 @@ export function ResourceComposer({
         type="button"
         aria-label="Close resource composer"
         className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
-        onClick={saving ? undefined : onClose}
+        onClick={handleClose}
       />
 
       <section className="fixed inset-x-3 top-1/2 z-50 max-h-[92vh] -translate-y-1/2 overflow-y-auto rounded-2xl bg-surface-container-lowest shadow-2xl sm:inset-x-6 lg:left-1/2 lg:w-full lg:max-w-5xl lg:-translate-x-1/2">
@@ -233,8 +261,7 @@ export function ResourceComposer({
               </div>
               <button
                 type="button"
-                onClick={onClose}
-                disabled={saving}
+                onClick={handleClose}
                 className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-container-lowest text-on-surface-variant transition hover:bg-surface-container-high"
               >
                 <Icon name="close" className="text-base" />
@@ -414,18 +441,33 @@ export function ResourceComposer({
                       </div>
                       <button
                         type="button"
-                        onClick={() => setFile(null)}
+                        onClick={() => handleFileChange(null)}
                         className="text-on-surface-variant transition hover:text-error"
+                        title="Remove file"
                       >
                         <Icon name="close" className="text-base" />
                       </button>
                     </div>
                     {saving && requiresFile ? (
-                      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface-container-high">
-                        <div
-                          className="h-full rounded-full bg-primary transition-all"
-                          style={{ width: `${uploadProgress}%` }}
-                        />
+                      <div className="mt-3 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-medium text-primary">
+                            {uploadProgress === 100 ? "✓ Complete" :
+                             uploadProgress > 80 ? "Finalizing..." :
+                             uploadProgress > 40 ? "Processing..." :
+                             "Uploading..."}
+                          </span>
+                          <span className="text-on-surface-variant">{uploadProgress}%</span>
+                        </div>
+                        <div className="h-2 overflow-hidden rounded-full bg-surface-container-high">
+                          <div
+                            className={cn(
+                              "h-full rounded-full transition-all duration-300",
+                              uploadProgress === 100 ? "bg-emerald-500" : "bg-primary",
+                            )}
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
                       </div>
                     ) : null}
                   </div>
@@ -469,6 +511,12 @@ export function ResourceComposer({
               </p>
             ) : null}
 
+            {success ? (
+              <p className="rounded-lg bg-emerald-500/10 px-4 py-3 text-sm font-medium text-emerald-600 dark:bg-emerald-400/10 dark:text-emerald-400">
+                {success}
+              </p>
+            ) : null}
+
             {slowUpload && saving ? (
               <p className="rounded-lg bg-primary/5 px-4 py-3 text-sm text-on-surface-variant">
                 <span className="font-semibold text-primary">Still uploading…</span> Large files can take a moment. Please stay on this page.
@@ -478,11 +526,10 @@ export function ResourceComposer({
             <div className="flex flex-col gap-3 border-t border-outline-variant/20 pt-5 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                onClick={onClose}
-                disabled={saving}
-                className="rounded-lg border border-outline-variant/40 px-5 py-3 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container disabled:opacity-60"
+                onClick={handleClose}
+                className="rounded-lg border border-outline-variant/40 px-5 py-3 text-sm font-semibold text-on-surface-variant transition hover:bg-surface-container"
               >
-                Cancel
+                {saving ? "Cancel Upload" : "Cancel"}
               </button>
               <button
                 type="button"
@@ -491,11 +538,18 @@ export function ResourceComposer({
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {saving ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary/40 border-t-on-primary" />
+                  <>
+                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-on-primary/40 border-t-on-primary" />
+                    {uploadProgress > 0 && uploadProgress < 100
+                      ? `Uploading ${uploadProgress}%`
+                      : "Saving..."}
+                  </>
                 ) : (
-                  <Icon name={isEditing ? "save" : "ios_share"} className="text-base" />
+                  <>
+                    <Icon name={isEditing ? "save" : "ios_share"} className="text-base" />
+                    {isEditing ? "Save Resource" : "Share Resource"}
+                  </>
                 )}
-                {saving ? "Saving..." : isEditing ? "Save Resource" : "Share Resource"}
               </button>
             </div>
           </div>

@@ -27,7 +27,9 @@ export type FirestoreUser = {
   skillsOffered: string[];
   skillsWanted: string[];
   bio: string;
-  rating: number;
+  rating?: number;
+  averageRating?: number;
+  totalReviews?: number;
   sessionsCompleted: number;
   createdAt?: FieldValue;
   lastLoginAt?: FieldValue;
@@ -38,6 +40,9 @@ export type FirestoreUser = {
    */
   firstLoginCompleted?: boolean;
   isSeeded?: boolean;
+  location?: string;
+  emailVisibility?: "public" | "private";
+  avatar?: string;
 };
 
 /** Real-time call lifecycle state stored on the session document. */
@@ -327,7 +332,15 @@ export async function getUserProfile(
  */
 export async function updateUserProfile(
   uid: string,
-  data: { skillsOffered: string[]; skillsWanted: string[]; bio: string }
+  data: Partial<{
+    name: string;
+    skillsOffered: string[];
+    skillsWanted: string[];
+    bio: string;
+    location: string;
+    emailVisibility: "public" | "private";
+    avatar: string;
+  }>
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), {
     ...data,
@@ -350,7 +363,13 @@ export async function getUsers(): Promise<BackendUser[]> {
         skillsOffered: data.skillsOffered || [],
         skillsWanted: data.skillsWanted || [],
         isSeeded: data.isSeeded,
-        // map rating/completed to UI requirements if necessary
+        avatar: data.avatar,
+        location: data.location,
+        emailVisibility: data.emailVisibility,
+        sessionsCompleted: data.sessionsCompleted || 0,
+        createdAt: data.createdAt ? (data.createdAt as any).toMillis() : undefined,
+        averageRating: data.averageRating ?? 0,
+        totalReviews: data.totalReviews ?? 0,
       };
     })
     .sort((a, b) => (a.isSeeded ? 1 : 0) - (b.isSeeded ? 1 : 0));
@@ -371,6 +390,13 @@ export async function getUserById(userId: string): Promise<BackendUser | null> {
     skillsOffered: data.skillsOffered || [],
     skillsWanted: data.skillsWanted || [],
     bio: data.bio || "",
+    avatar: data.avatar,
+    location: data.location,
+    emailVisibility: data.emailVisibility,
+    sessionsCompleted: data.sessionsCompleted || 0,
+    createdAt: data.createdAt ? (data.createdAt as any).toMillis() : undefined,
+    averageRating: data.averageRating ?? 0,
+    totalReviews: data.totalReviews ?? 0,
   };
 }
 

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { Tag } from "@/components/ui/tag";
+import { StarBadge } from "@/components/reviews/star-rating";
 import { cn } from "@/lib/utils";
 
 export type MentorCardData = {
@@ -10,7 +11,8 @@ export type MentorCardData = {
   role: string;
   quote: string;
   tags: string[];
-  rating: string;
+  averageRating: number;
+  totalReviews: number;
   /** URL to the mentor's photo. Leave empty ("") to render an initials avatar. */
   image: string;
   location?: string;
@@ -98,8 +100,11 @@ export function MentorCard({ mentor }: MentorCardProps) {
 
         {/* Rating chip */}
         <div className="absolute -bottom-2 -right-2 flex items-center gap-1 rounded-full bg-white px-3 py-1.5 shadow-md">
-          <Icon name="star" filled className="text-sm text-yellow-500" />
-          <span className="text-sm font-bold">{mentor.rating}</span>
+          {mentor.totalReviews > 0 ? (
+            <StarBadge rating={mentor.averageRating} totalReviews={mentor.totalReviews} size="sm" />
+          ) : (
+            <span className="text-xs font-bold text-stone-500 whitespace-nowrap">No reviews yet</span>
+          )}
         </div>
       </div>
 

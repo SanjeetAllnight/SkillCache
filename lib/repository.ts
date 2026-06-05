@@ -20,14 +20,7 @@ import {
   type QueryDocumentSnapshot,
   type Timestamp,
 } from "firebase/firestore";
-import {
-  deleteObject,
-  getDownloadURL,
-  ref,
-  uploadBytesResumable,
-} from "firebase/storage";
-
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 
 export const MAX_RESOURCE_FILE_SIZE = 25 * 1024 * 1024;
 
@@ -411,76 +404,16 @@ export function buildOptimisticResource(
       sessionSkill: input.sessionSkill,
     }),
     createdAt: nowMillis,
-    updatedAt: nowMillis,
     createdAtMillis: nowMillis,
     updatedAtMillis: nowMillis,
   };
 }
 
-/** Upload a file to Storage with timeout + retry. Returns the download URL. */
-async function uploadFileWithRetry(
-  storagePath: string,
-  file: File,
-  metadata: Record<string, string>,
-  onUploadProgress?: (progress: number) => void,
-  maxRetries = 3,
-  timeoutMs = 30_000,
-): Promise<string> {
-  let lastError: unknown;
-
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
-
-    try {
-      const uploadTask = uploadBytesResumable(ref(storage, storagePath), file, {
-        contentType: file.type || "application/octet-stream",
-        customMetadata: metadata,
-      });
-
-      await new Promise<void>((resolve, reject) => {
-        // Abort signal → cancel the task
-        controller.signal.addEventListener("abort", () => {
-          uploadTask.cancel();
-          reject(new Error("Upload timed out. Please check your connection and try again."));
-        });
-
-        uploadTask.on(
-          "state_changed",
-          (snapshot) => {
-            const progress = Math.round(
-              (snapshot.bytesTransferred / snapshot.totalBytes) * 100,
-            );
-            onUploadProgress?.(progress);
-          },
-          reject,
-          () => resolve(),
-        );
-      });
-
-      clearTimeout(timer);
-      return await getDownloadURL(uploadTask.snapshot.ref);
-    } catch (err) {
-      clearTimeout(timer);
-      lastError = err;
-      // Don't retry on auth/permission errors
-      const code = (err as { code?: string }).code ?? "";
-      if (code.startsWith("storage/unauthorized") || code === "storage/unauthenticated") {
-        throw err;
-      }
-      // Exponential back-off before retry
-      if (attempt < maxRetries - 1) {
-        await new Promise((r) => setTimeout(r, 500 * 2 ** attempt));
-      }
-    }
-  }
-
-  throw lastError;
-}
 
 export async function createKnowledgeResource(
   input: CreateResourceInput,
   onUploadProgress?: (progress: number) => void,
+  abortSignal?: AbortSignal,
 ): Promise<KnowledgeResource> {
   validateCreateInput(input);
 
@@ -488,8 +421,26 @@ export async function createKnowledgeResource(
   const type = input.type === "file" ? inferredType : input.type;
   const tags = normalizeTags(input.tags);
   const resourceRef = doc(resourcesCollection);
-  const storagePath = buildStoragePath(input, resourceRef.id, type);
   const now = serverTimestamp();
+
+  // Helper to map file types to seeded demo assets
+  const getDemoAssetUrl = (fileType: string) => {
+    if (fileType.includes("pdf")) {
+      const pdfs = [
+        "/demo-assets/Core_Java.pdf",
+        "/demo-assets/Core_Python.pdf",
+        "/demo-assets/Software_Engineering.pdf",
+        "/demo-assets/Software_Project_Management.pdf",
+        "/demo-assets/Technical_Communication.pdf"
+      ];
+      return pdfs[Math.floor(Math.random() * pdfs.length)];
+    }
+    if (fileType.includes("image")) return "/demo-assets/System_Architecture.svg";
+    if (fileType.includes("markdown")) return "/demo-assets/Session_Notes.md";
+    return "/demo-assets/React_Authentication_Example.tsx"; // fallback
+  };
+
+  const fileUrl = input.file ? getDemoAssetUrl(input.file.type) : undefined;
 
   const baseDocument: FirestoreResourceDocument = {
     title: input.title.trim(),
@@ -513,7 +464,8 @@ export async function createKnowledgeResource(
     fileName: input.file?.name,
     fileSize: input.file?.size,
     contentType: input.file?.type || (input.file ? "application/octet-stream" : undefined),
-    storagePath,
+    storagePath: undefined,
+    fileUrl,
     likesCount: 0,
     bookmarksCount: 0,
     downloadsCount: 0,
@@ -538,35 +490,39 @@ export async function createKnowledgeResource(
     updatedAt: now,
   };
 
+  console.log("[Repository] Writing Firestore document...", resourceRef.id);
   await setDoc(resourceRef, withoutUndefined(baseDocument));
+  console.log("[Repository] Firestore document written.");
 
-  if (!input.file || !storagePath) {
-    // Non-file resource (link, note, code) — return immediately
-    return buildOptimisticResource(input, resourceRef.id);
+  if (!input.file) {
+    console.log("[Repository] No file to upload, resource created.");
+    return buildOptimisticResource(input, resourceRef.id, fileUrl);
   }
 
-  try {
-    const fileUrl = await uploadFileWithRetry(
-      storagePath,
-      input.file,
-      {
-        uploaderId: input.uploaderId,
-        resourceId: resourceRef.id,
-        resourceType: type,
-        visibility: input.visibility,
-        sessionId: input.sessionId ?? "",
-      },
-      onUploadProgress,
-    );
+  console.log("[Repository] Starting SIMULATED file upload...");
 
+  try {
+    // Simulate upload progress taking ~2-3 seconds
+    const steps = 10;
+    const stepDuration = 250; 
+    
+    for (let i = 1; i <= steps; i++) {
+      if (abortSignal?.aborted) {
+        throw new Error("Upload aborted");
+      }
+      await new Promise(r => setTimeout(r, stepDuration));
+      onUploadProgress?.(i * 10);
+    }
+
+    console.log("[Repository] Simulated upload complete. Updating Firestore...");
     await updateDoc(resourceRef, {
-      fileUrl,
       uploadStatus: "ready",
       updatedAt: serverTimestamp(),
     });
 
     return buildOptimisticResource(input, resourceRef.id, fileUrl);
   } catch (error) {
+    console.error("[Repository] Simulated upload failed:", error);
     await updateDoc(resourceRef, {
       uploadStatus: "failed",
       updatedAt: serverTimestamp(),
@@ -813,11 +769,7 @@ export async function deleteKnowledgeResource(resource: KnowledgeResource, curre
     throw new Error("Only the contributor can delete this resource.");
   }
 
-  if (resource.storagePath) {
-    await deleteObject(ref(storage, resource.storagePath)).catch((error) => {
-      if (error?.code !== "storage/object-not-found") throw error;
-    });
-  }
+  // Firebase Storage deletion removed for demo-safe mock backend
 
   const [likesSnap, bookmarksSnap] = await Promise.all([
     getDocs(query(likesCollection, where("resourceId", "==", resource.id))),

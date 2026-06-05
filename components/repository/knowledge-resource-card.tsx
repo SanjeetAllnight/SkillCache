@@ -66,9 +66,18 @@ function formatDate(millis: number) {
 }
 
 function getActionLabel(resource: KnowledgeResource) {
+  if (resource.type === "pdf") return "Preview";
+  if (resource.type === "image") return "View";
   if (resource.externalUrl) return "Open";
   if (resource.fileUrl) return "Download";
   return "Read";
+}
+
+function getActionIcon(resource: KnowledgeResource) {
+  if (resource.type === "pdf" || resource.type === "image") return "visibility";
+  if (resource.externalUrl) return "open_in_new";
+  if (resource.fileUrl) return "download";
+  return "arrow_forward";
 }
 
 export function KnowledgeResourceCard({
@@ -87,6 +96,7 @@ export function KnowledgeResourceCard({
 }: KnowledgeResourceCardProps) {
   const meta = typeMeta[resource.type] ?? typeMeta.file;
   const actionLabel = getActionLabel(resource);
+  const actionIcon = getActionIcon(resource);
   const preview = resource.content?.trim();
 
   return (
@@ -222,7 +232,7 @@ export function KnowledgeResourceCard({
             className="inline-flex h-9 items-center gap-1 rounded-full bg-primary px-3 text-xs font-bold text-on-primary transition hover:opacity-90"
           >
             <Icon
-              name={resource.fileUrl ? "download" : resource.externalUrl ? "open_in_new" : "arrow_forward"}
+              name={actionIcon}
               className="text-base"
             />
             {actionLabel}

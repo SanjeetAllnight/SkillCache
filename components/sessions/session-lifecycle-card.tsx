@@ -73,7 +73,7 @@ export function SessionLifecycleCard({
   const joinable = canJoinSession(session, now);
   const canMentorReview = isMentor && session.status === "pending";
   const canReschedule = isMentor && ["pending", "accepted", "upcoming"].includes(session.status);
-  const canStart = isMentor && joinable && session.status !== "live";
+  const canStart = isMentor && ["accepted", "upcoming"].includes(session.status);
   const canJoin = joinable && (session.status === "live" || !isMentor);
 
   const primaryAction = useMemo(() => {

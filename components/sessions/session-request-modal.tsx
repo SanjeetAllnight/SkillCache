@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 
 import { Icon } from "@/components/ui/icon";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,32 +11,55 @@ import {
   type ApiSession,
 } from "@/lib/firebaseServices";
 import type { BackendUser } from "@/lib/mockUser";
+import { cn } from "@/lib/utils";
 
 type SessionRequestModalProps = {
   currentUser: BackendUser;
   mode?: "request" | "reschedule";
   session?: ApiSession | null;
+  initialMentorId?: string;
   onClose: () => void;
   onSaved: () => void;
 };
 
-function toISODate(localDatetime: string): string {
-  return new Date(localDatetime).toISOString();
+// Returns YYYY-MM-DD
+function getTomorrowDate() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow.toISOString().split("T")[0];
 }
 
-function toDatetimeLocal(iso?: string) {
-  if (!iso) return "";
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return "";
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 16);
+// Returns HH:00 for the next hour
+function getNextHourTime() {
+  const d = new Date();
+  d.setHours(d.getHours() + 1);
+  d.setMinutes(0);
+  return d.toTimeString().slice(0, 5); // "HH:MM"
+}
+
+// For ISO <-> local conversion
+function toISODate(dateStr: string, timeStr: string): string {
+  // combine into local datetime then get ISO
+  const d = new Date(`${dateStr}T${timeStr}`);
+  return d.toISOString();
+}
+
+function parseISODate(iso?: string) {
+  if (!iso) return { date: "", time: "" };
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { date: "", time: "" };
+  
+  // Format as local YYYY-MM-DD and HH:MM
+  const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+  return { date, time };
 }
 
 export function SessionRequestModal({
   currentUser,
   mode = "request",
   session,
+  initialMentorId,
   onClose,
   onSaved,
 }: SessionRequestModalProps) {
@@ -46,8 +69,20 @@ export function SessionRequestModal({
   const [title, setTitle] = useState(session?.title ?? "");
   const [description, setDescription] = useState(session?.description ?? "");
   const [skill, setSkill] = useState(session?.skill ?? "");
-  const [mentorId, setMentorId] = useState(session?.mentorId ?? "");
-  const [date, setDate] = useState(toDatetimeLocal(session?.date));
+  
+  // Mentor autocomplete state
+  const [mentorId, setMentorId] = useState(session?.mentorId ?? initialMentorId ?? "");
+  const [mentorSearch, setMentorSearch] = useState("");
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const initialDateTime = session?.date 
+    ? parseISODate(session.date) 
+    : { date: getTomorrowDate(), time: getNextHourTime() };
+
+  const [date, setDate] = useState(initialDateTime.date);
+  const [time, setTime] = useState(initialDateTime.time);
+  
   const [sessionType, setSessionType] = useState<"private" | "public">(
     session?.sessionType ?? "private"
   );
@@ -67,7 +102,15 @@ export function SessionRequestModal({
         const list = await getMentors(undefined, currentUser._id);
         if (!mounted) return;
         setMentors(list);
-        if (!mentorId && list[0]) setMentorId(list[0]._id);
+        
+        // Auto-select initialMentorId, or first available if none provided
+        if (!mentorId) {
+          if (initialMentorId && list.some(m => m._id === initialMentorId)) {
+            setMentorId(initialMentorId);
+          } else if (list[0]) {
+            setMentorId(list[0]._id);
+          }
+        }
       } catch (loadError) {
         if (mounted) {
           setError(loadError instanceof Error ? loadError.message : "Unable to load mentors.");
@@ -81,11 +124,36 @@ export function SessionRequestModal({
     return () => {
       mounted = false;
     };
-  }, [currentUser._id, isReschedule, mentorId]);
+  }, [currentUser._id, isReschedule, mentorId, initialMentorId]);
+
+  // Handle click outside combobox
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedMentor = mentors.find(m => m._id === mentorId);
+
+  // Sync mentor search input with selected mentor name initially or when selection changes
+  useEffect(() => {
+    if (selectedMentor && !isDropdownOpen) {
+      setMentorSearch(selectedMentor.name);
+    }
+  }, [selectedMentor, isDropdownOpen]);
+
+  const filteredMentors = mentors.filter(mentor => 
+    mentor.name.toLowerCase().includes(mentorSearch.toLowerCase()) || 
+    mentor.skillsOffered?.some(s => s.toLowerCase().includes(mentorSearch.toLowerCase()))
+  );
 
   const handleSubmit = useCallback(async () => {
-    if (!date) {
-      setError("Choose a date and time for the session.");
+    if (!date || !time) {
+      setError("Choose both a date and time for the session.");
       return;
     }
 
@@ -94,7 +162,7 @@ export function SessionRequestModal({
 
     try {
       if (isReschedule && session) {
-        await rescheduleSession(session._id, toISODate(date), rescheduleNote.trim());
+        await rescheduleSession(session._id, toISODate(date, time), rescheduleNote.trim());
         onSaved();
         return;
       }
@@ -110,7 +178,6 @@ export function SessionRequestModal({
         return;
       }
 
-      const selectedMentor = mentors.find((mentor) => mentor._id === mentorId);
       const firstSkill =
         skill.trim() ||
         selectedMentor?.skillsOffered?.[0] ||
@@ -122,7 +189,7 @@ export function SessionRequestModal({
         mentorId,
         learnerId: currentUser._id,
         skill: firstSkill,
-        date: toISODate(date),
+        date: toISODate(date, time),
         sessionType,
         durationMinutes,
         visibility: sessionType,
@@ -136,10 +203,10 @@ export function SessionRequestModal({
   }, [
     currentUser._id,
     date,
+    time,
     description,
     isReschedule,
     mentorId,
-    mentors,
     onSaved,
     rescheduleNote,
     session,
@@ -147,6 +214,7 @@ export function SessionRequestModal({
     title,
     sessionType,
     durationMinutes,
+    selectedMentor,
   ]);
 
   return (
@@ -212,31 +280,76 @@ export function SessionRequestModal({
               </label>
 
               <div className="grid gap-4 sm:grid-cols-2">
-                <label className="space-y-1.5">
+                <div className="space-y-1.5" ref={dropdownRef}>
                   <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
                     Mentor
                   </span>
                   {loadingMentors ? (
-                    <Skeleton className="h-12 w-full" />
+                    <Skeleton className="h-[46px] w-full" />
                   ) : mentors.length === 0 ? (
                     <p className="rounded-lg bg-surface-container px-4 py-3 text-sm text-stone-500">
                       No mentors are available yet.
                     </p>
                   ) : (
-                    <select
-                      value={mentorId}
-                      onChange={(event) => setMentorId(event.target.value)}
-                      className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                    >
-                      {mentors.map((mentor) => (
-                        <option key={mentor._id} value={mentor._id}>
-                          {mentor.name}
-                          {mentor.skillsOffered?.length ? ` - ${mentor.skillsOffered.slice(0, 2).join(", ")}` : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={mentorSearch}
+                          onChange={(e) => {
+                            setMentorSearch(e.target.value);
+                            setIsDropdownOpen(true);
+                            if (e.target.value === "") setMentorId(""); // Clear selection
+                          }}
+                          onFocus={() => setIsDropdownOpen(true)}
+                          placeholder="Search for a mentor..."
+                          className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                        />
+                        <Icon 
+                          name={isDropdownOpen ? "expand_less" : "expand_more"} 
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none"
+                        />
+                      </div>
+                      
+                      {isDropdownOpen && (
+                        <ul className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-outline-variant/30 bg-surface shadow-xl">
+                          {filteredMentors.length > 0 ? (
+                            filteredMentors.map((mentor) => (
+                              <li key={mentor._id}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setMentorId(mentor._id);
+                                    setMentorSearch(mentor.name);
+                                    setIsDropdownOpen(false);
+                                  }}
+                                  className={cn(
+                                    "flex w-full items-center justify-between px-4 py-3 text-left hover:bg-surface-container",
+                                    mentorId === mentor._id ? "bg-primary/5 text-primary" : "text-on-surface"
+                                  )}
+                                >
+                                  <div>
+                                    <p className="text-sm font-semibold">{mentor.name}</p>
+                                    <p className="text-xs text-on-surface-variant line-clamp-1">
+                                      {mentor.skillsOffered?.length ? mentor.skillsOffered.slice(0, 2).join(", ") : "General Mentor"}
+                                    </p>
+                                  </div>
+                                  {mentorId === mentor._id && (
+                                    <Icon name="check" className="text-base" />
+                                  )}
+                                </button>
+                              </li>
+                            ))
+                          ) : (
+                            <li className="px-4 py-3 text-sm text-stone-500 text-center">
+                              No mentors found
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
                   )}
-                </label>
+                </div>
 
                 <label className="space-y-1.5">
                   <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
@@ -294,18 +407,31 @@ export function SessionRequestModal({
             </div>
           )}
 
-          <label className="space-y-1.5">
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
-              Date and Time
-            </span>
-            <input
-              type="datetime-local"
-              value={date}
-              min={new Date().toISOString().slice(0, 16)}
-              onChange={(event) => setDate(event.target.value)}
-              className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-            />
-          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                Date
+              </span>
+              <input
+                type="date"
+                value={date}
+                min={new Date().toISOString().split("T")[0]}
+                onChange={(event) => setDate(event.target.value)}
+                className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+              />
+            </label>
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                Time
+              </span>
+              <input
+                type="time"
+                value={time}
+                onChange={(event) => setTime(event.target.value)}
+                className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+              />
+            </label>
+          </div>
 
           {isReschedule ? (
             <label className="space-y-1.5">

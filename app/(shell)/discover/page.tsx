@@ -198,16 +198,61 @@ export default function DiscoverPage() {
         <h2 className="font-headline text-2xl font-bold">Upcoming Workshops</h2>
         {publicWorkshops.length > 0 ? (
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {publicWorkshops.map((workshop) => (
-              <div key={workshop._id} className="app-card flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl">
+            {publicWorkshops.map((workshop) => {
+              const startsAt = new Date(workshop.date).getTime();
+              const now = Date.now();
+              const isLive = workshop.status === "live";
+              const isStartingSoon = !isLive && startsAt > now && startsAt - now <= 15 * 60 * 1000;
+              const isCompleted = workshop.status === "completed" || workshop.status === "cancelled";
+              
+              const acceptedCount = Object.values(workshop.participants || {}).filter(p => p.status === "accepted").length;
+              // Add 1 for the mentor/host themselves, so total taken = acceptedCount + 1
+              const seatsLeft = Math.max(0, (workshop.maxParticipants ?? 10) - (acceptedCount + 1));
+              
+              const participantStatus = user ? workshop.participants?.[user._id]?.status : undefined;
+              
+              let badge = <span className="rounded-full bg-surface-container-high px-3 py-1 text-[10px] font-bold tracking-widest text-on-surface-variant">SCHEDULED</span>;
+              if (isLive) {
+                badge = <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[10px] font-bold tracking-widest text-emerald-600">LIVE</span>;
+              } else if (isStartingSoon) {
+                badge = <span className="rounded-full bg-amber-500/10 px-3 py-1 text-[10px] font-bold tracking-widest text-amber-600">STARTING SOON</span>;
+              } else if (isCompleted) {
+                badge = <span className="rounded-full bg-surface-container-highest px-3 py-1 text-[10px] font-bold tracking-widest text-stone-500">COMPLETED</span>;
+              }
+
+              let actionLabel = "View Details";
+              let actionDisabled = false;
+              let actionIcon = "arrow_forward";
+
+              if (isCompleted) {
+                actionLabel = "Completed";
+                actionDisabled = true;
+                actionIcon = "check";
+              } else if (participantStatus === "pending") {
+                actionLabel = "Request Sent";
+                actionDisabled = true;
+                actionIcon = "hourglass_empty";
+              } else if (participantStatus === "accepted" || workshop.mentorId === user?._id) {
+                if (isLive) {
+                  actionLabel = "Join Now";
+                  actionIcon = "login";
+                } else {
+                  actionLabel = "Open Workshop";
+                  actionIcon = "event_seat";
+                }
+              }
+
+              return (
+              <div key={workshop._id} className="app-card relative flex flex-col justify-between transition-all hover:-translate-y-1 hover:shadow-xl group">
+                <Link href={`/sessions/${workshop._id}`} className="absolute inset-0 z-10">
+                  <span className="sr-only">View {workshop.title} details</span>
+                </Link>
                 <div>
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-primary">
                       <Icon name="event" className="text-[16px]" /> Workshop
                     </div>
-                    <span className="rounded-full bg-surface-container-high px-2.5 py-1 text-xs font-semibold text-on-surface-variant">
-                      {workshop.durationMinutes ?? 30} min
-                    </span>
+                    {badge}
                   </div>
                   <h3 className="mt-3 font-headline text-xl font-bold line-clamp-2">{workshop.title}</h3>
                   <p className="mt-2 text-sm text-stone-500 line-clamp-2">{workshop.description}</p>
@@ -218,21 +263,32 @@ export default function DiscoverPage() {
                     </div>
                     <div className="text-sm">
                       <p className="font-semibold text-on-surface">By {workshop.mentor.name}</p>
-                      <p className="text-xs text-stone-500">{new Date(workshop.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>
+                      <p className="text-xs text-stone-500">
+                        {new Date(workshop.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+                        <span className="mx-1">•</span>
+                        {workshop.durationMinutes ?? 30} min
+                      </p>
                     </div>
                   </div>
                 </div>
-                <div className="mt-6 flex items-center justify-between border-t border-outline-variant/30 pt-4">
+                <div className="mt-6 flex items-center justify-between border-t border-outline-variant/30 pt-4 relative z-20">
                   <span className="text-xs font-medium text-stone-500">
                     <Icon name="group" className="inline text-[14px] align-text-bottom mr-1" />
-                    {(workshop.maxParticipants ?? 10) - 1} seats left
+                    {seatsLeft} {seatsLeft === 1 ? "seat" : "seats"} left
                   </span>
-                  <span className="rounded-full bg-surface-container-high px-3 py-1 text-xs font-semibold text-on-surface-variant">
-                    Open
-                  </span>
+                  {actionDisabled ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-surface-container-high px-4 py-2 text-xs font-bold text-stone-500">
+                      {actionLabel} <Icon name={actionIcon} className="text-[14px]" />
+                    </span>
+                  ) : (
+                    <Link href={`/sessions/${workshop._id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-xs font-bold text-on-primary transition hover:opacity-90">
+                      {actionLabel} <Icon name={actionIcon} className="text-[14px]" />
+                    </Link>
+                  )}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="rounded-2xl border border-dashed border-outline-variant/30 p-10 text-center text-sm text-stone-500">
@@ -285,7 +341,8 @@ export default function DiscoverPage() {
                     role: m.skillsOffered?.[0] ? `${m.skillsOffered[0]} Mentor` : "Community Mentor",
                     quote: m.bio || "Passionate about sharing knowledge and growing together.",
                     tags: m.skillsOffered || [],
-                    rating: "5.0",
+                    averageRating: m.averageRating ?? 0,
+                    totalReviews: m.totalReviews ?? 0,
                     image: m.avatar || "",
                     profileHref: `/profile?mentor=${m._id}`,
                   }} 
@@ -315,7 +372,8 @@ export default function DiscoverPage() {
                           role: m.skillsOffered?.[0] ? `${m.skillsOffered[0]} Mentor` : "Community Mentor",
                           quote: m.bio || "Passionate about sharing knowledge and growing together.",
                           tags: m.skillsOffered || [],
-                          rating: "5.0",
+                          averageRating: m.averageRating ?? 0,
+                          totalReviews: m.totalReviews ?? 0,
                           image: m.avatar || "",
                           profileHref: `/profile?mentor=${m._id}`,
                         }} 

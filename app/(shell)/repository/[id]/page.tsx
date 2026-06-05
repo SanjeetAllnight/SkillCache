@@ -52,6 +52,18 @@ function ResourcePreview({ resource }: { resource: KnowledgeResource }) {
     );
   }
 
+  if (resource.uploadStatus === "failed") {
+    return (
+      <div className="rounded-2xl border border-dashed border-error/40 bg-error/5 px-6 py-16 text-center">
+        <Icon name="error" className="text-5xl text-error" />
+        <p className="mt-4 text-lg font-bold text-error">Upload failed</p>
+        <p className="mt-2 text-sm text-on-surface-variant">
+          The file could not be uploaded. The resource metadata was saved but the file is unavailable. You can delete and re-upload this resource.
+        </p>
+      </div>
+    );
+  }
+
   if (resource.type === "image" && resource.fileUrl) {
     return (
       <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-editorial">
@@ -66,12 +78,66 @@ function ResourcePreview({ resource }: { resource: KnowledgeResource }) {
 
   if (resource.type === "pdf" && resource.fileUrl) {
     return (
-      <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-editorial">
-        <iframe
-          title={resource.title}
-          src={resource.fileUrl}
-          className="h-[720px] w-full border-0"
-        />
+      <div className="space-y-6">
+        {/* Always-visible action buttons so user can always access the file */}
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-surface-container-lowest p-8 text-center shadow-editorial md:p-12">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+            <Icon name="picture_as_pdf" className="text-3xl" />
+          </div>
+          <h2 className="mt-4 text-xl font-bold">{resource.fileName || resource.title || "Document"}</h2>
+          <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-on-surface-variant">
+            <span>{formatResourceFileSize(resource.fileSize)}</span>
+            <span>•</span>
+            <span>Uploaded by {resource.uploaderName}</span>
+            <span>•</span>
+            <span>{formatDate(resource.createdAtMillis)}</span>
+          </div>
+          <div className="mt-8 flex flex-wrap justify-center gap-4">
+            <a
+              href={resource.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
+            >
+              <Icon name="open_in_new" />
+              Open PDF
+            </a>
+            <a
+              href={resource.fileUrl}
+              download
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant/40 bg-surface px-6 py-3 text-sm font-bold text-on-surface transition hover:bg-surface-container"
+            >
+              <Icon name="download" />
+              Download PDF
+            </a>
+          </div>
+        </div>
+
+        {/* Inline preview: try <object>, fall back to Google Docs viewer inside iframe */}
+        <div className="overflow-hidden rounded-2xl bg-surface-container-lowest shadow-editorial">
+          <object
+            data={resource.fileUrl}
+            type="application/pdf"
+            className="h-[800px] w-full border-0"
+          >
+            {/* Fallback: Google Docs PDF viewer for browsers that block direct PDF embeds */}
+            <iframe
+              src={`https://docs.google.com/viewer?embedded=true&url=${encodeURIComponent(resource.fileUrl)}`}
+              className="h-[800px] w-full border-0"
+              title={resource.title}
+            >
+              <div className="flex h-[400px] flex-col items-center justify-center px-6 text-center">
+                <Icon name="picture_as_pdf" className="text-5xl text-stone-300" />
+                <p className="mt-4 text-lg font-bold">Preview unavailable in this browser</p>
+                <p className="mt-2 max-w-sm text-sm text-on-surface-variant">
+                  Use the Open PDF or Download PDF buttons above to access this file.
+                </p>
+              </div>
+            </iframe>
+          </object>
+        </div>
       </div>
     );
   }
@@ -110,12 +176,67 @@ function ResourcePreview({ resource }: { resource: KnowledgeResource }) {
     );
   }
 
+  if (resource.fileUrl) {
+    const isImage = resource.type === "image" || resource.contentType?.startsWith("image/");
+    const isPdf = resource.type === "pdf" || resource.contentType === "application/pdf";
+
+    return (
+      <div className="flex flex-col items-center justify-center rounded-2xl bg-surface-container-lowest p-8 text-center shadow-editorial md:p-12">
+        <h2 className="text-xl font-bold">{resource.fileName || resource.title || "Attached File"}</h2>
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm text-on-surface-variant">
+          <span>{formatResourceFileSize(resource.fileSize)}</span>
+          <span>•</span>
+          <span>Uploaded by {resource.uploaderName}</span>
+          <span>•</span>
+          <span>{formatDate(resource.createdAtMillis)}</span>
+        </div>
+
+        <div className="mt-6 w-full max-w-4xl overflow-hidden rounded-xl border border-outline-variant/20 bg-surface text-left">
+          {isImage ? (
+            <img src={resource.fileUrl} alt={resource.title} className="max-h-[600px] w-full object-contain" />
+          ) : isPdf ? (
+            <object data={resource.fileUrl} type="application/pdf" className="h-[600px] w-full">
+              <div className="flex flex-col items-center justify-center p-12 text-center">
+                <Icon name="picture_as_pdf" className="text-4xl text-stone-300" />
+                <p className="mt-4 text-sm text-on-surface-variant">Browser PDF preview unavailable. Please download the file.</p>
+              </div>
+            </object>
+          ) : (
+            <iframe src={resource.fileUrl} className="h-[600px] w-full bg-surface-container-lowest" title="Resource Preview" />
+          )}
+        </div>
+
+        <div className="mt-8 flex flex-wrap justify-center gap-4">
+          <a
+            href={resource.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-6 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
+          >
+            <Icon name="open_in_new" />
+            Open Full Screen
+          </a>
+          <a
+            href={resource.fileUrl}
+            download={resource.fileName || "resource"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-outline-variant/40 bg-surface px-6 py-3 text-sm font-bold text-on-surface transition hover:bg-surface-container"
+          >
+            <Icon name="download" />
+            Download File
+          </a>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-dashed border-outline-variant/40 bg-surface-container-lowest px-6 py-16 text-center">
       <Icon name="draft" className="text-5xl text-stone-300" />
-      <p className="mt-4 text-lg font-bold">No preview available</p>
+      <p className="mt-4 text-lg font-bold">No resource attached</p>
       <p className="mt-2 text-sm text-on-surface-variant">
-        Open the attached resource to inspect the original material.
+        This resource does not have any readable content or files.
       </p>
     </div>
   );
