@@ -265,20 +265,6 @@ export function SessionRequestModal({
                 />
               </label>
 
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                  Request Notes
-                </span>
-                <textarea
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  rows={3}
-                  maxLength={400}
-                  placeholder="What are you hoping to learn or unblock?"
-                  className="w-full resize-none rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                />
-              </label>
-
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5" ref={dropdownRef}>
                   <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
@@ -351,17 +337,21 @@ export function SessionRequestModal({
                   )}
                 </div>
 
-                <label className="space-y-1.5">
-                  <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                    Skill Focus
-                  </span>
-                  <input
-                    value={skill}
-                    onChange={(event) => setSkill(event.target.value)}
-                    placeholder="Optional"
-                    className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                  />
-                </label>
+                {!isReschedule && (
+                  <label className="space-y-1.5">
+                    <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
+                      Session Type
+                    </span>
+                    <select
+                      value={sessionType}
+                      onChange={(e) => setSessionType(e.target.value as "private" | "public")}
+                      className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
+                    >
+                      <option value="private">Private Session</option>
+                      <option value="public">Public Workshop</option>
+                    </select>
+                  </label>
+                )}
               </div>
             </>
           ) : (
@@ -370,40 +360,6 @@ export function SessionRequestModal({
               <p className="mt-1 text-xs text-on-surface-variant">
                 Current mentor: {session?.mentor.name}
               </p>
-            </div>
-          )}
-
-          {!isReschedule && (
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                  Session Type
-                </span>
-                <select
-                  value={sessionType}
-                  onChange={(e) => setSessionType(e.target.value as "private" | "public")}
-                  className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                >
-                  <option value="private">Private Session</option>
-                  <option value="public">Public Workshop</option>
-                </select>
-              </label>
-
-              <label className="space-y-1.5">
-                <span className="text-xs font-bold uppercase tracking-widest text-stone-500">
-                  Duration
-                </span>
-                <select
-                  value={durationMinutes.toString()}
-                  onChange={(e) => setDurationMinutes(Number(e.target.value))}
-                  className="w-full rounded-lg border border-outline-variant/30 bg-surface px-4 py-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/15"
-                >
-                  <option value="15">15 Minutes</option>
-                  <option value="30">30 Minutes</option>
-                  <option value="45">45 Minutes</option>
-                  <option value="60">60 Minutes</option>
-                </select>
-              </label>
             </div>
           )}
 

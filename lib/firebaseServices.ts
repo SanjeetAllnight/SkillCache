@@ -627,6 +627,41 @@ export async function updateSessionParticipant(
   });
 }
 
+export type PendingJoinRequest = {
+  userId: string;
+  name: string;
+  skills: string[];
+};
+
+/**
+ * Real-time listener for pending join requests on a session.
+ * Only the mentor should subscribe to this while inside the live call.
+ * Calls onChange whenever the set of pending participants changes.
+ */
+export function listenPendingJoinRequests(
+  sessionId: string,
+  onChange: (requests: PendingJoinRequest[]) => void,
+): Unsubscribe {
+  if (!sessionId) return () => undefined;
+
+  return onSnapshot(doc(db, "sessions", sessionId), (snapshot) => {
+    if (!snapshot.exists()) {
+      onChange([]);
+      return;
+    }
+    const data = snapshot.data() as FirestoreSession;
+    const participants = data.participants ?? {};
+    const pending: PendingJoinRequest[] = Object.entries(participants)
+      .filter(([, entry]) => entry.status === "pending")
+      .map(([uid, entry]) => ({
+        userId: uid,
+        name: entry.name,
+        skills: entry.skills,
+      }));
+    onChange(pending);
+  });
+}
+
 export type SessionRatingData = {
   sessionId: string;
   mentorId: string;
@@ -824,7 +859,11 @@ export function listenPublicSessions(
       
       const sessions = snapshot.docs
         .map((d) => toApiSession(d.id, d.data() as FirestoreSession, usersMap))
-        .filter((s): s is ApiSession => Boolean(s))
+        .filter((s): s is ApiSession => {
+          if (!s) return false;
+          if (s.status === "completed" || s.status === "cancelled" || s.status === "missed") return false;
+          return true;
+        })
         .sort(sortSessionsDescending);
         
       onChange(sessions);

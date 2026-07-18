@@ -422,7 +422,7 @@ export default function SessionDetailsPage() {
               if (session.status !== "live") {
                 await startLiveSession(session._id);
               }
-              router.push(`/call/${session._id}`);
+              router.push(`/session/${session._id}`);
             }}
             className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
           >
@@ -465,7 +465,7 @@ export default function SessionDetailsPage() {
            actionButton = (
              <button
                type="button"
-               onClick={() => router.push(`/call/${session._id}`)}
+               onClick={() => router.push(`/session/${session._id}`)}
                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90"
              >
                <Icon name="login" className="text-base" />

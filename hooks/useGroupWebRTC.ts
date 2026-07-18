@@ -68,7 +68,13 @@ export function useGroupWebRTC(
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, PeerState>>(new Map());
   const unsubsRef = useRef<Map<string, () => void>>(new Map());
+  const pendingCandidatesRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const isMountedRef = useRef(true);
+  // Keep myRole in a ref so changes to it (e.g. session loading after WebRTC
+  // already started) do NOT re-trigger the lifecycle effect and tear down
+  // existing peer connections.
+  const myRoleRef = useRef<"mentor" | "learner">(myRole);
+  myRoleRef.current = myRole;
 
   // ─── Local Media Acquisition ────────────────────────────────────────────────
   const acquireMedia = useCallback(async () => {
@@ -178,25 +184,52 @@ export function useGroupWebRTC(
         myUid,
         async (offer) => {
           // Received Offer
-          if (pc.signalingState !== "stable") return;
-          await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          await answerConnectionOffer(callId, connectionId, answer);
+          try {
+            if (pc.signalingState !== "stable") return;
+            await pc.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            await answerConnectionOffer(callId, connectionId, answer);
+            
+            // Flush queued candidates
+            const queue = pendingCandidatesRef.current.get(peerUid) || [];
+            for (const candidate of queue) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn("Error adding queued candidate", err));
+            }
+            pendingCandidatesRef.current.set(peerUid, []);
+          } catch (err) {
+            console.error("Error handling offer:", err);
+          }
         },
         async (answer) => {
           // Received Answer
-          if (pc.signalingState !== "have-local-offer") return;
-          await pc.setRemoteDescription(new RTCSessionDescription(answer));
+          try {
+            if (pc.signalingState !== "have-local-offer") return;
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
+
+            // Flush queued candidates
+            const queue = pendingCandidatesRef.current.get(peerUid) || [];
+            for (const candidate of queue) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn("Error adding queued candidate", err));
+            }
+            pendingCandidatesRef.current.set(peerUid, []);
+          } catch (err) {
+            console.error("Error handling answer:", err);
+          }
         },
         async (candidate) => {
           // Received Candidate
-          if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } else {
-            // Queue it? Usually setting remoteDescription happens first because of Firestore ordering,
-            // but for a robust app we might need a queue. Keeping simple for now.
-            setTimeout(() => pc.addIceCandidate(new RTCIceCandidate(candidate)), 1000);
+          try {
+            if (pc.remoteDescription) {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } else {
+              // Queue it until remote description is set
+              const queue = pendingCandidatesRef.current.get(peerUid) || [];
+              queue.push(candidate);
+              pendingCandidatesRef.current.set(peerUid, queue);
+            }
+          } catch (err) {
+            console.error("Error handling ICE candidate:", err);
           }
         }
       );
@@ -206,10 +239,14 @@ export function useGroupWebRTC(
       if (myUid < peerUid) {
         // I am the initiator
         pc.onnegotiationneeded = async () => {
-          if (pc.signalingState !== "stable") return;
-          const offer = await pc.createOffer();
-          await pc.setLocalDescription(offer);
-          await createConnectionOffer(callId, connectionId, myUid, peerUid, offer);
+          try {
+            if (pc.signalingState !== "stable") return;
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await createConnectionOffer(callId, connectionId, myUid, peerUid, offer);
+          } catch (err) {
+            console.error("Error creating offer:", err);
+          }
         };
       }
     },
@@ -232,6 +269,7 @@ export function useGroupWebRTC(
       unsub();
       unsubsRef.current.delete(`conn_${peerUid}`);
     }
+    pendingCandidatesRef.current.delete(peerUid);
   }, []);
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
@@ -241,7 +279,7 @@ export function useGroupWebRTC(
     async function init() {
       if (!callId || !myUid) return;
       await acquireMedia();
-      await joinPresence(callId, myUid, myName, myRole);
+      await joinPresence(callId, myUid, myName, myRoleRef.current);
 
       const unsubPresence = listenToPresence(callId, (presenceList) => {
         // Check if I was kicked
@@ -283,7 +321,8 @@ export function useGroupWebRTC(
       peersRef.current.forEach((peer) => peer.pc?.close());
       peersRef.current.clear();
     };
-  }, [callId, myUid, myName, myRole, acquireMedia, setupPeerConnection, cleanupPeer]);
+  }, [callId, myUid, myName, acquireMedia, setupPeerConnection, cleanupPeer]);
+  // NOTE: myRole intentionally excluded — role changes must not destroy WebRTC.
 
   // ─── Media Controls ─────────────────────────────────────────────────────────
   const toggleMute = useCallback(() => {

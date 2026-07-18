@@ -161,7 +161,10 @@ service cloud.firestore {
     match /sessions/{sessionId} {
       allow read: if isAuthenticated() && (
         request.auth.uid == resource.data.mentorId ||
-        request.auth.uid == resource.data.learnerId
+        request.auth.uid == resource.data.learnerId ||
+        resource.data.visibility == "public" ||
+        (resource.data.participants != null &&
+          request.auth.uid in resource.data.participants)
       );
 
       allow create: if isAuthenticated() && (
@@ -169,9 +172,19 @@ service cloud.firestore {
         request.auth.uid == request.resource.data.learnerId
       );
 
+      // Mentor/learner can do any update (status changes, admissions, etc.)
+      // Any authenticated user can write ONLY their own pending join-request
+      // entry on a public session (used by requestToJoinSession).
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.mentorId ||
-        request.auth.uid == resource.data.learnerId
+        request.auth.uid == resource.data.learnerId ||
+        (
+          resource.data.visibility == "public" &&
+          request.auth.uid != resource.data.mentorId &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(["participants"]) &&
+          request.resource.data.participants[request.auth.uid].status == "pending"
+        )
       );
 
       allow delete: if false;
