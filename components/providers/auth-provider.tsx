@@ -16,6 +16,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  GithubAuthProvider,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -41,6 +42,7 @@ type AuthContextValue = {
   login: (credentials: { email: string; password: string }, redirectTo?: string) => Promise<void>;
   signup: (payload: { name: string; email: string; password: string; skillsOffered?: string[]; skillsWanted?: string[] }, redirectTo?: string) => Promise<void>;
   googleLogin: (redirectTo?: string) => Promise<void>;
+  githubLogin: (redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -51,6 +53,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => undefined,
   signup: async () => undefined,
   googleLogin: async () => undefined,
+  githubLogin: async () => undefined,
   logout: async () => undefined,
 });
 
@@ -199,6 +202,25 @@ export function AuthProvider({
     router.refresh();
   }, [router]);
 
+  // ─── GitHub Login ──────────────────────────────────────────────────────────
+  const githubLogin = useCallback(async (redirectTo = DEFAULT_AUTH_REDIRECT) => {
+    const provider = new GithubAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+
+    await createUserProfile(cred.user.uid, {
+      name: cred.user.displayName || "SkillCache Member",
+      email: cred.user.email || "",
+    });
+
+    const profile = await getUserProfile(cred.user.uid);
+    if (!profile || profile.profileComplete === false) {
+      router.replace("/complete-profile");
+    } else {
+      router.replace(resolveAuthRedirect(redirectTo));
+    }
+    router.refresh();
+  }, [router]);
+
   // ─── Logout ────────────────────────────────────────────────────────────────
   // Order is critical:
   //   1. Clear all browser storage so the middleware cookie is gone immediately.
@@ -229,9 +251,10 @@ export function AuthProvider({
       login,
       signup,
       googleLogin,
+      githubLogin,
       logout,
     }),
-    [user, isLoggedIn, isAuthReady, login, signup, googleLogin, logout]
+    [user, isLoggedIn, isAuthReady, login, signup, googleLogin, githubLogin, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

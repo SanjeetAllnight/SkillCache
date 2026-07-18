@@ -15,7 +15,7 @@ type AuthPageViewProps = {
 };
 
 export function AuthPageView({ nextPath }: AuthPageViewProps) {
-  const { login, signup, googleLogin, isAuthReady, isLoggedIn } = useAuth();
+  const { login, signup, googleLogin, githubLogin, isAuthReady, isLoggedIn } = useAuth();
   const [activeView, setActiveView] = useState<"login" | "signup">("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState({
@@ -102,16 +102,20 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
     }
   }
 
-  async function handleSocialAuth() {
+  async function handleSocialAuth(provider: "google" | "github") {
     setError(null);
     setIsSubmitting(true);
     try {
-      await googleLogin(redirectPath);
+      if (provider === "google") {
+        await googleLogin(redirectPath);
+      } else {
+        await githubLogin(redirectPath);
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to complete Google authentication.",
+          : `Unable to complete ${provider === "google" ? "Google" : "GitHub"} authentication.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -290,7 +294,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
-              onClick={handleSocialAuth}
+              onClick={() => handleSocialAuth("google")}
               disabled={isSubmitting}
               className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-surface-container-low text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -304,7 +308,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
             </button>
             <button
               type="button"
-              onClick={handleSocialAuth}
+              onClick={() => handleSocialAuth("github")}
               disabled={isSubmitting}
               className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-surface-container-low text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
             >
