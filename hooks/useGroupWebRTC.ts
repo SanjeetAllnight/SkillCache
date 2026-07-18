@@ -20,6 +20,7 @@ import {
   answerConnectionOffer,
   sendConnectionSignal,
   listenToConnection,
+  deleteConnection,
   type PresenceDocument,
 } from "@/lib/callSignaling";
 
@@ -36,6 +37,7 @@ export interface PeerState {
   phase: ConnectionPhase;
   isMuted: boolean;
   isCameraOff: boolean;
+  joinedAtSeconds: number;
 }
 
 export interface UseGroupWebRTCReturn {
@@ -125,10 +127,11 @@ export function useGroupWebRTC(
 
   // ─── Setup Peer Connection ──────────────────────────────────────────────────
   const setupPeerConnection = useCallback(
-    (peerUid: string, peerName: string, peerRole: "mentor" | "learner") => {
+    (peerUid: string, peerName: string, peerRole: "mentor" | "learner", joinedAtSeconds: number) => {
       if (peersRef.current.has(peerUid)) return;
 
       const pc = new RTCPeerConnection({ iceServers: DEFAULT_ICE });
+      console.log(`[WebRTC] Peer connection created for ${peerUid} (${peerRole})`);
       const connectionId = getConnectionId(myUid, peerUid);
 
       const newPeer: PeerState = {
@@ -140,6 +143,7 @@ export function useGroupWebRTC(
         phase: "connecting",
         isMuted: false,
         isCameraOff: false,
+        joinedAtSeconds,
       };
 
       setPeersMap((prev) => {
@@ -158,6 +162,7 @@ export function useGroupWebRTC(
 
       // Handle remote tracks
       pc.ontrack = (event) => {
+        console.log(`[WebRTC] ontrack received from ${peerUid}`);
         const remoteStream = event.streams[0];
         updatePeer(peerUid, (p) => ({ ...p, stream: remoteStream }));
       };
@@ -165,11 +170,13 @@ export function useGroupWebRTC(
       // Handle ICE candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
+          console.log(`[WebRTC] ICE candidate generated for ${peerUid}`);
           sendConnectionSignal(callId, connectionId, myUid, event.candidate.toJSON());
         }
       };
 
       pc.oniceconnectionstatechange = () => {
+        console.log(`[WebRTC] ICE state for ${peerUid}: ${pc.iceConnectionState}`);
         if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
           updatePeer(peerUid, (p) => ({ ...p, phase: "connected" }));
         } else if (pc.iceConnectionState === "failed" || pc.iceConnectionState === "disconnected") {
@@ -185,10 +192,12 @@ export function useGroupWebRTC(
         async (offer) => {
           // Received Offer
           try {
+            console.log(`[WebRTC] Offer received from ${peerUid}`);
             if (pc.signalingState !== "stable") return;
             await pc.setRemoteDescription(new RTCSessionDescription(offer));
             const answer = await pc.createAnswer();
             await pc.setLocalDescription(answer);
+            console.log(`[WebRTC] Answer created for ${peerUid}`);
             await answerConnectionOffer(callId, connectionId, answer);
             
             // Flush queued candidates
@@ -204,6 +213,7 @@ export function useGroupWebRTC(
         async (answer) => {
           // Received Answer
           try {
+            console.log(`[WebRTC] Answer received from ${peerUid}`);
             if (pc.signalingState !== "have-local-offer") return;
             await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
@@ -220,6 +230,7 @@ export function useGroupWebRTC(
         async (candidate) => {
           // Received Candidate
           try {
+            console.log(`[WebRTC] ICE candidate received from ${peerUid}`);
             if (pc.remoteDescription) {
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } else {
@@ -241,6 +252,7 @@ export function useGroupWebRTC(
         pc.onnegotiationneeded = async () => {
           try {
             if (pc.signalingState !== "stable") return;
+            console.log(`[WebRTC] Offer created for ${peerUid}`);
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
             await createConnectionOffer(callId, connectionId, myUid, peerUid, offer);
@@ -270,7 +282,10 @@ export function useGroupWebRTC(
       unsubsRef.current.delete(`conn_${peerUid}`);
     }
     pendingCandidatesRef.current.delete(peerUid);
-  }, []);
+    if (callId && myUid) {
+      deleteConnection(callId, getConnectionId(myUid, peerUid)).catch(err => console.warn("Error deleting connection", err));
+    }
+  }, [callId, myUid]);
 
   // ─── Lifecycle ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -294,8 +309,20 @@ export function useGroupWebRTC(
         presenceList.forEach((p) => {
           if (p.uid === myUid) return;
           currentUids.add(p.uid);
-          if (!peersRef.current.has(p.uid)) {
-            setupPeerConnection(p.uid, p.name, p.role);
+
+          // p.joinedAt is a Firestore Timestamp object with .seconds when read from snapshot
+          const currentJoinedAt = (p.joinedAt as unknown as { seconds?: number })?.seconds || 0;
+
+          const existingPeer = peersRef.current.get(p.uid);
+          if (existingPeer) {
+            // Check if the peer refreshed the page and re-joined
+            if (currentJoinedAt > existingPeer.joinedAtSeconds) {
+              console.log(`[WebRTC] Peer ${p.uid} refreshed/re-joined. Reconnecting...`);
+              cleanupPeer(p.uid);
+              setupPeerConnection(p.uid, p.name, p.role, currentJoinedAt);
+            }
+          } else {
+            setupPeerConnection(p.uid, p.name, p.role, currentJoinedAt);
           }
         });
 

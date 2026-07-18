@@ -131,6 +131,17 @@ export async function answerConnectionOffer(
   });
 }
 
+export async function deleteConnection(
+  callId: string,
+  connectionId: string
+): Promise<void> {
+  try {
+    await deleteDoc(doc(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId));
+  } catch {
+    // Best effort
+  }
+}
+
 export async function sendConnectionSignal(
   callId: string,
   connectionId: string,
@@ -155,8 +166,8 @@ export function listenToConnection(
   onAnswer: (answer: RTCSessionDescriptionInit) => void,
   onCandidate: (candidate: RTCIceCandidateInit) => void
 ): Unsubscribe {
-  let offerHandled = false;
-  let answerHandled = false;
+  let lastOfferStr = "";
+  let lastAnswerStr = "";
 
   const unsubDoc = onSnapshot(
     doc(db, CALLS_COLLECTION, callId, CONNECTIONS_SUBCOLLECTION, connectionId),
@@ -165,15 +176,21 @@ export function listenToConnection(
       const data = snap.data() as ConnectionDocument;
 
       // I am the receiver waiting for an offer
-      if (data.offer && !offerHandled && data.receiverUid === myUid) {
-        offerHandled = true;
-        onOffer(data.offer);
+      if (data.offer && data.receiverUid === myUid) {
+        const offerStr = JSON.stringify(data.offer);
+        if (offerStr !== lastOfferStr) {
+          lastOfferStr = offerStr;
+          onOffer(data.offer);
+        }
       }
 
       // I am the initiator waiting for an answer
-      if (data.answer && !answerHandled && data.initiatorUid === myUid) {
-        answerHandled = true;
-        onAnswer(data.answer);
+      if (data.answer && data.initiatorUid === myUid) {
+        const answerStr = JSON.stringify(data.answer);
+        if (answerStr !== lastAnswerStr) {
+          lastAnswerStr = answerStr;
+          onAnswer(data.answer);
+        }
       }
     }
   );
