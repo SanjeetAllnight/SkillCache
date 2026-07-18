@@ -120,48 +120,43 @@ function AdmissionPopup({
   );
 }
 
-// ─── Video Layout ─────────────────────────────────────────────────────────────
+// ─── Local Video Tile ─────────────────────────────────────────────────────────
 
-function VideoLayout({
-  localVideoRef,
+function LocalVideoTile({
   localStream,
   isLocalCamOff,
   isLocalMuted,
   isMentor,
   mediaMode,
-  peers,
-  sessionMentorId,
+  fullHeight = false,
 }: {
-  localVideoRef: React.RefObject<HTMLVideoElement | null>;
   localStream: MediaStream | null;
   isLocalCamOff: boolean;
   isLocalMuted: boolean;
   isMentor: boolean;
   mediaMode: string;
-  peers: PeerState[];
-  sessionMentorId?: string;
+  fullHeight?: boolean;
 }) {
-  const hasLocalVideo = (localStream?.getVideoTracks().length ?? 0) > 0;
-  const totalParticipants = peers.length + 1; // +1 for self
+  const videoRef = useRef<HTMLVideoElement>(null);
 
-  // The "primary" tile is always the mentor.
-  // If the current user IS the mentor, the local video is primary.
-  // If the current user is a learner, the mentor peer is primary.
-  const mentorPeer = peers.find((p) => p.uid === sessionMentorId);
-  const nonMentorPeers = peers.filter((p) => p.uid !== sessionMentorId);
+  useEffect(() => {
+    if (videoRef.current && localStream) {
+      videoRef.current.srcObject = localStream;
+    }
+  }, [localStream]);
 
-  const LocalVideoTile = ({ fullHeight = false }: { fullHeight?: boolean }) => (
+  return (
     <div
       className={`relative flex w-full flex-col items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-stone-900 shadow-xl ${fullHeight ? "h-full" : "aspect-video"}`}
     >
       <video
-        ref={localVideoRef}
+        ref={videoRef}
         autoPlay
         muted
         playsInline
         className="h-full w-full object-cover"
       />
-      {(isLocalCamOff || !hasLocalVideo) && (
+      {(isLocalCamOff || (!localStream?.getVideoTracks().length)) && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-900/90">
           <Icon name="videocam_off" className="text-3xl text-stone-500" />
           <span className="text-xs uppercase tracking-widest text-stone-400">
@@ -182,13 +177,47 @@ function VideoLayout({
       )}
     </div>
   );
+}
+
+// ─── Video Layout ─────────────────────────────────────────────────────────────
+
+function VideoLayout({
+  localStream,
+  isLocalCamOff,
+  isLocalMuted,
+  isMentor,
+  mediaMode,
+  peers,
+  sessionMentorId,
+}: {
+  localStream: MediaStream | null;
+  isLocalCamOff: boolean;
+  isLocalMuted: boolean;
+  isMentor: boolean;
+  mediaMode: string;
+  peers: PeerState[];
+  sessionMentorId?: string;
+}) {
+  const totalParticipants = peers.length + 1; // +1 for self
+
+  // The "primary" tile is always the mentor.
+  // If the current user IS the mentor, the local video is primary.
+  // If the current user is a learner, the mentor peer is primary.
+  const mentorPeer = peers.find((p) => p.uid === sessionMentorId);
+  const nonMentorPeers = peers.filter((p) => p.uid !== sessionMentorId);
 
   // ── Waiting / Solo ─────────────────────────────────────────────────────────
   if (totalParticipants === 1) {
     return (
       <div className="flex flex-1 items-center justify-center p-4">
         <div className="w-full max-w-3xl">
-          <LocalVideoTile />
+          <LocalVideoTile
+            localStream={localStream}
+            isLocalCamOff={isLocalCamOff}
+            isLocalMuted={isLocalMuted}
+            isMentor={isMentor}
+            mediaMode={mediaMode}
+          />
           <p className="mt-4 text-center text-sm text-stone-500">Waiting for others to join…</p>
         </div>
       </div>
@@ -206,31 +235,27 @@ function VideoLayout({
         <div className="h-full w-full overflow-hidden rounded-2xl border border-white/10 bg-stone-900 shadow-2xl">
           {dominantIsLocal ? (
             // Local user is mentor → show local video as primary
-            <>
-              <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-              {(isLocalCamOff || !hasLocalVideo) && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-900/90">
-                  <Icon name="videocam_off" className="text-3xl text-stone-500" />
-                  <span className="text-xs uppercase tracking-widest text-stone-400">
-                    {mediaMode === "audio-only" ? "Audio Only" : "No Camera"}
-                  </span>
-                </div>
-              )}
-              <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-lg bg-stone-900/80 px-3 py-1.5 text-sm text-white backdrop-blur-md">
-                <span className="font-bold">You (Mentor)</span>
-              </div>
-              {isLocalMuted && (
-                <div className="absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full bg-red-600/80">
-                  <Icon name="mic_off" className="text-sm text-white" />
-                </div>
-              )}
-            </>
+            <LocalVideoTile
+              localStream={localStream}
+              isLocalCamOff={isLocalCamOff}
+              isLocalMuted={isLocalMuted}
+              isMentor={isMentor}
+              mediaMode={mediaMode}
+              fullHeight
+            />
           ) : (
             // Current user is learner → mentor peer is dominant
             mentorPeer ? (
               <PeerVideoInline peer={mentorPeer} />
             ) : (
-              <LocalVideoTile fullHeight />
+              <LocalVideoTile
+                localStream={localStream}
+                isLocalCamOff={isLocalCamOff}
+                isLocalMuted={isLocalMuted}
+                isMentor={isMentor}
+                mediaMode={mediaMode}
+                fullHeight
+              />
             )
           )}
         </div>
@@ -240,7 +265,13 @@ function VideoLayout({
           {dominantIsLocal ? (
             pipPeer ? <PeerVideo peer={pipPeer} sessionMentorId={sessionMentorId} /> : null
           ) : (
-            <LocalVideoTile />
+            <LocalVideoTile
+              localStream={localStream}
+              isLocalCamOff={isLocalCamOff}
+              isLocalMuted={isLocalMuted}
+              isMentor={isMentor}
+              mediaMode={mediaMode}
+            />
           )}
         </div>
       </div>
@@ -253,21 +284,25 @@ function VideoLayout({
       {/* Primary / mentor row */}
       <div className="flex-1 overflow-hidden rounded-2xl border border-white/10 bg-stone-900 shadow-xl">
         {isMentor ? (
-          <>
-            <video ref={localVideoRef} autoPlay muted playsInline className="h-full w-full object-cover" />
-            {(isLocalCamOff || !hasLocalVideo) && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-stone-900/90">
-                <Icon name="videocam_off" className="text-3xl text-stone-500" />
-              </div>
-            )}
-            <div className="absolute bottom-4 left-4 flex items-center gap-2 rounded-lg bg-stone-900/80 px-3 py-1.5 text-sm text-white backdrop-blur-md">
-              <span className="font-bold">You (Mentor)</span>
-            </div>
-          </>
+          <LocalVideoTile
+            localStream={localStream}
+            isLocalCamOff={isLocalCamOff}
+            isLocalMuted={isLocalMuted}
+            isMentor={isMentor}
+            mediaMode={mediaMode}
+            fullHeight
+          />
         ) : mentorPeer ? (
           <PeerVideoInline peer={mentorPeer} />
         ) : (
-          <LocalVideoTile fullHeight />
+          <LocalVideoTile
+            localStream={localStream}
+            isLocalCamOff={isLocalCamOff}
+            isLocalMuted={isLocalMuted}
+            isMentor={isMentor}
+            mediaMode={mediaMode}
+            fullHeight
+          />
         )}
       </div>
 
@@ -275,7 +310,13 @@ function VideoLayout({
       <div className={`grid gap-3 ${nonMentorPeers.length === 0 ? "hidden" : "grid-cols-2 md:grid-cols-3 lg:grid-cols-4"}`}>
         {/* Local user tile (if learner) */}
         {!isMentor && (
-          <LocalVideoTile />
+          <LocalVideoTile
+            localStream={localStream}
+            isLocalCamOff={isLocalCamOff}
+            isLocalMuted={isLocalMuted}
+            isMentor={isMentor}
+            mediaMode={mediaMode}
+          />
         )}
         {/* Remote learner peers */}
         {nonMentorPeers.map((peer) => (
@@ -350,7 +391,6 @@ export default function CallPage() {
     myRole
   );
 
-  const localVideoRef = useRef<HTMLVideoElement>(null);
   const [isLocalMuted, setIsLocalMuted] = useState(false);
   const [isLocalCamOff, setIsLocalCamOff] = useState(false);
 
@@ -433,12 +473,12 @@ export default function CallPage() {
     }
   }, [isKicked, router, sessionId]);
 
-  // ── Bind Local Video ──
+  // ── Handle Kick ──
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (isKicked) {
+      router.push(`/sessions/${sessionId}`);
     }
-  }, [localStream]);
+  }, [isKicked, router, sessionId]);
 
   // ── Handlers ──
   const handleEndSession = async () => {
@@ -539,7 +579,6 @@ export default function CallPage() {
 
         {/* Adaptive video layout */}
         <VideoLayout
-          localVideoRef={localVideoRef}
           localStream={localStream}
           isLocalCamOff={isLocalCamOff}
           isLocalMuted={isLocalMuted}
