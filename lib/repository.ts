@@ -291,7 +291,26 @@ function normalizeResource(id: string, data: Partial<FirestoreResourceDocument> 
     sessionParticipantIds: Array.isArray(data.sessionParticipantIds)
       ? (data.sessionParticipantIds as string[])
       : [],
-    fileUrl: typeof data.fileUrl === "string" ? data.fileUrl : undefined,
+    fileUrl: (() => {
+      if (typeof data.fileUrl !== "string") return undefined;
+      const url = data.fileUrl;
+      if (!url.startsWith("/demo-assets/")) return url;
+      const validAssets = [
+        "/demo-assets/Java Inheritance QuestionBank.pdf",
+        "/demo-assets/Java Interfaces QuestionBank.pdf",
+        "/demo-assets/PYQs.pdf",
+        "/demo-assets/Project Management Notes.pdf",
+        "/demo-assets/Software Processes.pdf",
+        "/demo-assets/System_Architecture.svg",
+        "/demo-assets/Session_Notes.md",
+        "/demo-assets/React_Authentication_Example.tsx"
+      ];
+      if (validAssets.includes(url)) return url;
+      if (url.endsWith(".pdf") || data.type === "pdf") {
+        return "/demo-assets/Software Processes.pdf";
+      }
+      return url;
+    })(),
     storagePath: typeof data.storagePath === "string" ? data.storagePath : undefined,
     fileName: typeof data.fileName === "string" ? data.fileName : undefined,
     fileSize: typeof data.fileSize === "number" ? data.fileSize : undefined,
@@ -424,15 +443,18 @@ export async function createKnowledgeResource(
   const now = serverTimestamp();
 
   // Helper to map file types to seeded demo assets
-  const getDemoAssetUrl = (fileType: string) => {
-    if (fileType.includes("pdf")) {
+  const getDemoAssetUrl = (fileType: string, fileName?: string) => {
+    if (fileType.includes("pdf") || (fileName && fileName.endsWith(".pdf"))) {
       const pdfs = [
-        "/demo-assets/Core_Java.pdf",
-        "/demo-assets/Core_Python.pdf",
-        "/demo-assets/Software_Engineering.pdf",
-        "/demo-assets/Software_Project_Management.pdf",
-        "/demo-assets/Technical_Communication.pdf"
+        "/demo-assets/Java Inheritance QuestionBank.pdf",
+        "/demo-assets/Java Interfaces QuestionBank.pdf",
+        "/demo-assets/PYQs.pdf",
+        "/demo-assets/Project Management Notes.pdf",
+        "/demo-assets/Software Processes.pdf"
       ];
+      if (fileName && pdfs.includes(`/demo-assets/${fileName}`)) {
+        return `/demo-assets/${fileName}`;
+      }
       return pdfs[Math.floor(Math.random() * pdfs.length)];
     }
     if (fileType.includes("image")) return "/demo-assets/System_Architecture.svg";
@@ -440,7 +462,7 @@ export async function createKnowledgeResource(
     return "/demo-assets/React_Authentication_Example.tsx"; // fallback
   };
 
-  const fileUrl = input.file ? getDemoAssetUrl(input.file.type) : undefined;
+  const fileUrl = input.file ? getDemoAssetUrl(input.file.type, input.file.name) : undefined;
 
   const baseDocument: FirestoreResourceDocument = {
     title: input.title.trim(),
