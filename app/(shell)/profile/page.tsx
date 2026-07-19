@@ -465,7 +465,7 @@ export default function ProfilePage() {
                   : `Explore ${profile.name}'s skills and book a mentorship session.`}
               </p>
               <div className="flex flex-wrap items-center gap-4">
-                <Button href={isOwnProfile ? "/mentors" : "/sessions"} variant="solid" rounded="xl">
+                <Button href={isOwnProfile ? "/mentors" : `/sessions?book=true&mentor=${profile._id}`} variant="solid" rounded="xl">
                   {isOwnProfile ? "Find Mentors" : "Book Session"}
                   <Icon name="chevron_right" className="text-sm" />
                 </Button>

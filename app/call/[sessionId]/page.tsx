@@ -10,6 +10,7 @@ import {
   getSessionById,
   listenToSessionCallStatus,
   updateSessionCallStatus,
+  completeSession,
   type ApiSession,
   type CallStatus,
 } from "@/lib/firebaseServices";
@@ -160,11 +161,17 @@ export default function CallPage() {
 
   const handleEndCall = useCallback(async () => {
     if (timerRef.current) clearInterval(timerRef.current);
-    // Reset shared call state to idle so the room can be reused
-    await updateSessionCallStatus(sessionId, "idle").catch(() => {/* best-effort */});
+    
+    // Mark session as completed in Firestore
+    if (user?._id) {
+      await completeSession(sessionId, user._id).catch(() => {/* best-effort */});
+    } else {
+      await updateSessionCallStatus(sessionId, "idle").catch(() => {/* best-effort */});
+    }
+
     await endCall();
     setTimeout(() => router.push("/sessions"), 1500);
-  }, [sessionId, endCall, router]);
+  }, [sessionId, user?._id, endCall, router]);
 
   const toggleMute = useCallback(() => {
     if (!localStream) return;

@@ -30,18 +30,31 @@ function toISODate(localDatetime: string): string {
 
 interface NewSessionModalProps {
   currentUser: BackendUser;
+  initialMentorId?: string | null;
   onClose: () => void;
   onCreated: () => void;
 }
 
-function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalProps) {
+function NewSessionModal({ currentUser, initialMentorId, onClose, onCreated }: NewSessionModalProps) {
   const [mentors, setMentors]     = useState<BackendUser[]>([]);
   const [loadingMentors, setLoadingMentors] = useState(true);
 
   const [title, setTitle]         = useState("");
   const [skill, setSkill]         = useState("");
   const [mentorId, setMentorId]   = useState("");
-  const [date, setDate]           = useState("");
+  const [dateStr, setDateStr]     = useState(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, "0");
+    const dd = String(d.getDate()).padStart(2, "0");
+    return `${yyyy}-${mm}-${dd}`;
+  });
+  const [hour, setHour]           = useState("10");
+  const [minute, setMinute]       = useState("00");
+  const [ampm, setAmpm]           = useState("AM");
+
+  const [searchMentor, setSearchMentor] = useState("");
+  const [showMentorDropdown, setShowMentorDropdown] = useState(false);
   const [saving, setSaving]       = useState(false);
   const [error, setError]         = useState<string | null>(null);
 
@@ -51,10 +64,14 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
   useEffect(() => {
     async function load() {
       try {
-        // Exclude self — user can't be their own mentor
         const list = await getMentors(undefined, currentUser._id);
         setMentors(list);
-        if (list[0]) setMentorId(list[0]._id);
+        
+        if (initialMentorId && list.some(m => m._id === initialMentorId)) {
+          setMentorId(initialMentorId);
+        } else if (list[0]) {
+          setMentorId(list[0]._id);
+        }
       } finally {
         setLoadingMentors(false);
       }
@@ -65,7 +82,18 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
   const handleSubmit = useCallback(async () => {
     if (!title.trim()) { setError("Session title is required."); return; }
     if (!mentorId)     { setError("Please select a mentor."); return; }
-    if (!date)         { setError("Please choose a date and time."); return; }
+    if (!dateStr)      { setError("Please choose a date."); return; }
+
+    const [yyyy, mm, dd] = dateStr.split("-").map(Number);
+    let h = parseInt(hour, 10);
+    if (ampm === "PM" && h !== 12) h += 12;
+    if (ampm === "AM" && h === 12) h = 0;
+    const finalDate = new Date(yyyy, mm - 1, dd, h, parseInt(minute, 10));
+
+    if (finalDate.getTime() < Date.now()) {
+      setError("Please choose a future time.");
+      return;
+    }
 
     const selectedMentor = mentors.find((m) => m._id === mentorId);
     const firstSkill = skill.trim() ||
@@ -80,7 +108,7 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
         mentorId,
         learnerId,
         skill:     firstSkill,
-        date:      toISODate(date),
+        date:      finalDate.toISOString(),
         status:    "upcoming",
       });
       onCreated();
@@ -88,7 +116,13 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
       setError((err as Error).message);
       setSaving(false);
     }
-  }, [title, mentorId, learnerId, skill, date, mentors, onCreated]);
+  }, [title, mentorId, learnerId, skill, dateStr, hour, minute, ampm, mentors, onCreated]);
+
+  const filteredMentors = mentors.filter(m => 
+    m.name.toLowerCase().includes(searchMentor.toLowerCase()) || 
+    m.skillsOffered?.some(s => s.toLowerCase().includes(searchMentor.toLowerCase()))
+  );
+  const selectedMentorObj = mentors.find(m => m._id === mentorId);
 
   return (
     <>
@@ -152,8 +186,8 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
           </div>
 
           {/* Mentor picker */}
-          <div className="space-y-1.5">
-            <label htmlFor="session-mentor" className="text-xs font-bold uppercase tracking-widest text-stone-400">
+          <div className="space-y-1.5 relative">
+            <label className="text-xs font-bold uppercase tracking-widest text-stone-400">
               Mentor
             </label>
             {loadingMentors ? (
@@ -163,35 +197,116 @@ function NewSessionModal({ currentUser, onClose, onCreated }: NewSessionModalPro
                 No other mentors found. Ask someone to add skills to their profile.
               </p>
             ) : (
-              <select
-                id="session-mentor"
-                value={mentorId}
-                onChange={(e) => setMentorId(e.target.value)}
-                className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {mentors.map((m) => (
-                  <option key={m._id} value={m._id}>
-                    {m.name}
-                    {m.skillsOffered?.length ? ` — ${m.skillsOffered.slice(0, 2).join(", ")}` : ""}
-                  </option>
-                ))}
-              </select>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowMentorDropdown(!showMentorDropdown)}
+                  className="flex w-full items-center justify-between rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-left text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <span>
+                    {selectedMentorObj ? (
+                      <span className="font-semibold">{selectedMentorObj.name}</span>
+                    ) : (
+                      <span className="text-stone-400">Select a mentor...</span>
+                    )}
+                  </span>
+                  <Icon name="expand_more" className="text-stone-400" />
+                </button>
+
+                {showMentorDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowMentorDropdown(false)} />
+                    <div className="absolute left-0 right-0 top-full z-40 mt-2 flex max-h-60 flex-col overflow-hidden rounded-xl border border-outline-variant/30 bg-surface-container-high shadow-xl">
+                      <div className="border-b border-outline-variant/20 p-2">
+                        <div className="flex items-center gap-2 rounded-lg bg-surface-container-lowest px-3 py-2 text-sm">
+                          <Icon name="search" className="text-stone-400" />
+                          <input
+                            type="text"
+                            autoFocus
+                            placeholder="Search by name or skill..."
+                            value={searchMentor}
+                            onChange={(e) => setSearchMentor(e.target.value)}
+                            className="w-full bg-transparent outline-none placeholder:text-stone-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex-1 overflow-y-auto p-2">
+                        {filteredMentors.length === 0 ? (
+                          <p className="px-3 py-4 text-center text-sm text-stone-400">No mentors found.</p>
+                        ) : (
+                          filteredMentors.map((m) => (
+                            <button
+                              key={m._id}
+                              type="button"
+                              onClick={() => {
+                                setMentorId(m._id);
+                                setShowMentorDropdown(false);
+                                setSearchMentor("");
+                              }}
+                              className={`flex w-full flex-col items-start gap-0.5 rounded-lg px-3 py-2 text-left transition ${
+                                mentorId === m._id ? "bg-primary/10 text-primary" : "hover:bg-surface-container-highest"
+                              }`}
+                            >
+                              <span className="text-sm font-semibold">{m.name}</span>
+                              <span className="text-xs text-stone-400">
+                                {m.skillsOffered?.length ? m.skillsOffered.slice(0, 2).join(", ") : "No specific skills listed"}
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
             )}
           </div>
 
           {/* Date & time */}
-          <div className="space-y-1.5">
-            <label htmlFor="session-date" className="text-xs font-bold uppercase tracking-widest text-stone-400">
+          <div className="space-y-3">
+            <label className="text-xs font-bold uppercase tracking-widest text-stone-400">
               Date & Time
             </label>
-            <input
-              id="session-date"
-              type="datetime-local"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              min={new Date().toISOString().slice(0, 16)}
-              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <input
+                id="session-date"
+                type="date"
+                value={dateStr}
+                onChange={(e) => setDateStr(e.target.value)}
+                min={new Date().toISOString().split("T")[0]}
+                className="w-full sm:w-1/2 rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              />
+              <div className="flex flex-1 items-center gap-2">
+                <select
+                  value={hour}
+                  onChange={(e) => setHour(e.target.value)}
+                  className="flex-1 appearance-none rounded-xl border border-outline-variant/30 bg-surface-container px-3 py-3 text-center text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {Array.from({ length: 12 }).map((_, i) => {
+                    const h = String(i + 1).padStart(2, "0");
+                    return <option key={h} value={h}>{h}</option>;
+                  })}
+                </select>
+                <span className="text-stone-400 font-bold">:</span>
+                <select
+                  value={minute}
+                  onChange={(e) => setMinute(e.target.value)}
+                  className="flex-1 appearance-none rounded-xl border border-outline-variant/30 bg-surface-container px-3 py-3 text-center text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {["00", "15", "30", "45"].map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+                <select
+                  value={ampm}
+                  onChange={(e) => setAmpm(e.target.value)}
+                  className="flex-1 appearance-none rounded-xl border border-outline-variant/30 bg-surface-container px-3 py-3 text-center text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="AM">AM</option>
+                  <option value="PM">PM</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           {/* Error */}
@@ -244,6 +359,20 @@ export default function SessionsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError]         = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [initialMentorId, setInitialMentorId] = useState<string | null>(null);
+
+  // Auto-open booking modal if query params are present
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("book") === "true") {
+        setShowModal(true);
+        setInitialMentorId(params.get("mentor"));
+        // Remove query params to avoid re-triggering on refresh
+        window.history.replaceState({}, "", window.location.pathname);
+      }
+    }
+  }, []);
 
   // ── Load sessions for current user ──────────────────────────────────────
   const load = useCallback(async (uid: string, signal: { cancelled: boolean }) => {
@@ -447,7 +576,11 @@ export default function SessionsPage() {
       {showModal && user && (
         <NewSessionModal
           currentUser={user}
-          onClose={() => setShowModal(false)}
+          initialMentorId={initialMentorId}
+          onClose={() => {
+            setShowModal(false);
+            setInitialMentorId(null);
+          }}
           onCreated={handleCreated}
         />
       )}
