@@ -429,21 +429,27 @@ export default function SessionsPage() {
     if (!user?._id) return;
     try {
       await acceptSession(sessionId, user._id);
-      void load(user._id, { cancelled: false });
+      // Update local state immediately for instant UI feedback
+      setSessions((prev) => 
+        prev.map((s) => (s._id === sessionId ? { ...s, status: "upcoming" } : s))
+      );
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [user?._id, load]);
+  }, [user?._id]);
 
   const handleDecline = useCallback(async (sessionId: string) => {
     if (!user?._id) return;
     try {
       await declineSession(sessionId, user._id);
-      void load(user._id, { cancelled: false });
+      // Update local state immediately for instant UI feedback
+      setSessions((prev) => 
+        prev.map((s) => (s._id === sessionId ? { ...s, status: "declined" } : s))
+      );
     } catch (err) {
       setError((err as Error).message);
     }
-  }, [user?._id, load]);
+  }, [user?._id]);
 
   // ── After session created — close modal + reload ─────────────────────────
   const handleCreated = useCallback(() => {
