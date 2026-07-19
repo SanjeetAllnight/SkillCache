@@ -124,36 +124,81 @@ interface ShareModalProps {
 }
 
 function ShareModal({ userId, onClose, onShared }: ShareModalProps) {
-  const [title, setTitle]       = useState("");
-  const [desc, setDesc]         = useState("");
-  const [tagsRaw, setTagsRaw]   = useState("");
-  const [fileUrl, setFileUrl]   = useState("");
-  const [content, setContent]   = useState("");
-  const [saving, setSaving]     = useState(false);
-  const [error, setError]       = useState<string | null>(null);
+  const [title, setTitle] = useState("");
+  const [desc, setDesc] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      // Pre-fill title with filename without extension
+      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      setTitle(nameWithoutExt);
+      setError(null);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      const nameWithoutExt = file.name.substring(0, file.name.lastIndexOf('.')) || file.name;
+      setTitle(nameWithoutExt);
+      setError(null);
+    }
+  };
 
   const handleSubmit = useCallback(async () => {
-    if (!title.trim())                      { setError("Title is required."); return; }
-    if (!desc.trim())                       { setError("Description is required."); return; }
-    if (!fileUrl.trim() && !content.trim()) { setError("Add a link or some content."); return; }
+    if (!selectedFile) { setError("Please select a file to upload."); return; }
+    if (!title.trim()) { setError("Title is required."); return; }
 
     setSaving(true);
     setError(null);
     try {
+      const demoAssets = [
+        "Java Inheritance QuestionBank.pdf",
+        "Java Interfaces QuestionBank.pdf",
+        "PYQs.pdf",
+        "Project Management Notes.pdf",
+        "React_Authentication_Example.tsx",
+        "Session_Notes.md",
+        "Software Processes.pdf",
+        "System_Architecture.svg"
+      ];
+      const uploadedName = selectedFile.name.toLowerCase();
+      let matchedFile = demoAssets.find(asset => asset.toLowerCase() === uploadedName);
+      if (!matchedFile) {
+        matchedFile = demoAssets.find(asset => uploadedName.includes(asset.toLowerCase().replace(".pdf", "")));
+      }
+      if (!matchedFile) {
+        matchedFile = demoAssets.find(asset => asset.toLowerCase().includes(uploadedName.replace(".pdf", "")));
+      }
+      if (!matchedFile) {
+        // Fallback to a static PDF if no match
+        matchedFile = demoAssets.filter(a => a.endsWith(".pdf"))[selectedFile.name.length % 5];
+      }
+      const mappedUrl = "/demo-assets/" + matchedFile;
+
       await addResource({
-        title:       title.trim(),
+        title: title.trim(),
         description: desc.trim(),
-        tags:        parseTagInput(tagsRaw),
+        tags: [],
         userId,
-        fileUrl:     fileUrl.trim() || undefined,
-        content:     content.trim() || undefined,
+        fileUrl: mappedUrl,
       });
+
+      // Artificial delay for upload simulation
+      await new Promise((resolve) => setTimeout(resolve, 800));
       onShared();
     } catch (err) {
       setError((err as Error).message);
       setSaving(false);
     }
-  }, [title, desc, tagsRaw, fileUrl, content, userId, onShared]);
+  }, [title, desc, selectedFile, userId, onShared]);
 
   return (
     <>
@@ -215,65 +260,48 @@ function ShareModal({ userId, onClose, onShared }: ShareModalProps) {
             <p className="text-right text-[11px] text-stone-400">{desc.length} / 300</p>
           </div>
 
-          {/* Tags */}
-          <div className="space-y-1.5">
-            <label htmlFor="resource-tags" className="text-xs font-bold uppercase tracking-widest text-stone-400">
-              Tags
-            </label>
-            <input
-              id="resource-tags"
-              type="text"
-              value={tagsRaw}
-              onChange={(e) => setTagsRaw(e.target.value)}
-              placeholder="React, TypeScript, Figma…"
-              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-            <p className="text-[11px] text-stone-400">Separate with commas</p>
-          </div>
-
-          {/* Divider */}
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-outline-variant/20" />
-            <span className="text-xs font-bold uppercase tracking-widest text-stone-400">Content</span>
-            <span className="h-px flex-1 bg-outline-variant/20" />
-          </div>
-
-          {/* File / URL */}
-          <div className="space-y-1.5">
-            <label htmlFor="resource-url" className="text-xs font-bold uppercase tracking-widest text-stone-400">
-              Link or File URL
-            </label>
-            <input
-              id="resource-url"
-              type="url"
-              value={fileUrl}
-              onChange={(e) => setFileUrl(e.target.value)}
-              placeholder="https://docs.google.com/…"
-              className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
-
-          {/* OR divider */}
-          <div className="flex items-center gap-3">
-            <span className="h-px flex-1 bg-outline-variant/20" />
-            <span className="text-xs text-stone-400">or</span>
-            <span className="h-px flex-1 bg-outline-variant/20" />
-          </div>
-
-          {/* Inline content */}
-          <div className="space-y-1.5">
-            <label htmlFor="resource-content" className="text-xs font-bold uppercase tracking-widest text-stone-400">
-              Inline Text / Notes
-            </label>
-            <textarea
-              id="resource-content"
-              rows={4}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Paste a code snippet, notes, or markdown…"
-              className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 font-mono text-xs text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-            />
-          </div>
+          {/* File Picker */}
+          {!selectedFile ? (
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={handleDrop}
+              className="relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-outline-variant/50 bg-surface-container-low px-6 py-10 transition-colors hover:border-primary/50 hover:bg-surface-container"
+            >
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx"
+                onChange={handleFileChange}
+                className="absolute inset-0 z-10 cursor-pointer opacity-0"
+                aria-label="Upload file"
+              />
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Icon name="upload_file" className="text-xl" />
+              </div>
+              <div className="text-center">
+                <p className="font-bold text-on-surface">Drag & Drop your file here</p>
+                <p className="text-sm text-on-surface-variant mt-1">or <span className="text-primary hover:underline">Browse Files</span></p>
+              </div>
+              <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-stone-400">
+                PDF, DOC, DOCX
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <Icon name="description" className="shrink-0 text-primary" />
+                <span className="truncate text-sm font-semibold text-on-surface">
+                  {selectedFile.name}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedFile(null)}
+                className="shrink-0 text-xs font-bold uppercase tracking-widest text-error hover:underline"
+              >
+                Remove
+              </button>
+            </div>
+          )}
 
           {/* Error */}
           {error && (

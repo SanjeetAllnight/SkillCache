@@ -1,0 +1,13 @@
+export const authPageData = {
+  featureImage:
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuAVN6jx2bmgBBhoMTt0w6w_vuDvcowd048BnZJyZnKBVScAW9mJfcORKrXv483Mu_uO8tsaOtPIN1IRKf2Fe0L8YgD0xis-UUnBxx1WT0xCQJ7-QzJnIK4TDhXwS-1HX2Szq1FkgylyEwndsFlt6Y380G2eElMIkxd-cAOfGK04RYjWjBqBEQM7JlkknuWBzKAalC36u_RHqB36B1ONlYVfBssFS566yDxFhZw8FVX5T-pfBvmXWgqlPopEhG_6HPmkL5vVSB206pc",
+  googleLogo:
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuBSenT04NlAO8BAbJVEwHg4ZzwdB_7jTxEEVIwW-2-xKOq1RwKN6RxqF_GsSDREx_UQPzaRuHr--rovpFLrJWoVpLbxp4A0Bp9OcW0gY5JZbw0pFkX0bN4zXImQdjS7nKeHH5q-Si7fso7xXdrNFBUDSlBWCE7GUgzjLphi0TtxTa-vC4fEcOd4FzJnY4VwiEdFVNS--w0IMRif31rt3iNoJ2PUIUflbsWOxYqAWLsx1AUleoMguvIXVZmDIyQbExsKLvnbWTPeK7Y",
+};
+
+export const splashData = {
+  leftImage:
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuB9Tgg_2xt2mdMC4XnKECmcTWuWp0OTI5SzQ7PM7IjRTCb_HKz2YpFVP5S6BzEJofusIZEO3lw3s6r1UTIrJm5hFPvkF4HRU0wMGx3SZuu9iE8xcnHjl2yobUdY99ZcTmdKVJS9qoJwuJ-8GUx3v1m79BPvT0HFe5uqAt5uz8PmnM8vstiVnAhkVtmqYwnngSh0wxJWnW_fdoQjX0U-mJHXiUbG3Kf-PM3cuDtUKsBOFORoUd7-5jmf4EwHRwMWsMPrmNDjP-kOOEg",
+  rightImage:
+    "https://lh3.googleusercontent.com/aida-public/AB6AXuCRl6qo2YcKROFHIHF4aS6BtMt1gakIGT9ju3VSWu0gMxBE4VCMlwYDL3T912bUNSLQb9x-_Iy2WvOfEsQQzHDWUEB1EyUV4jTMCZrkzkswqJBUC_mSgMy445tpHbILtgji3QS1Wr16ukbeCxugALThCnJ5gL4rrODU9_fJyKy4b2Xm9MZiNOP19Kf86LYSAcejQ9lgGoXHbWsMjOqRi0wb6m7zNavwQWQY-iTevZMYPI2-jaryJcZtVqs_IJLEbRVbuUjke3Qr8jM",
+};

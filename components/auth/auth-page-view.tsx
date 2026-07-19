@@ -7,14 +7,15 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { DEFAULT_AUTH_REDIRECT, resolveAuthRedirect } from "@/lib/auth";
-import { authPageData } from "@/lib/mock-data";
+import { authPageData } from "@/lib/static-assets";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type AuthPageViewProps = {
   nextPath?: string;
 };
 
 export function AuthPageView({ nextPath }: AuthPageViewProps) {
-  const { login, signup, googleLogin } = useAuth();
+  const { login, signup, googleLogin, githubLogin, isAuthReady, isLoggedIn } = useAuth();
   const [activeView, setActiveView] = useState<"login" | "signup">("login");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formState, setFormState] = useState({
@@ -24,6 +25,27 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
   });
   const [error, setError] = useState<string | null>(null);
   const redirectPath = resolveAuthRedirect(nextPath);
+
+  // ── Auth-state loading guard ───────────────────────────────────────────────
+  // While onAuthStateChanged hasn't resolved yet, render a neutral screen.
+  // This prevents the login form from flashing for an already-authenticated
+  // user before the provider's automatic redirect to /dashboard fires.
+  if (!isAuthReady) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f0efe6]">
+        <div className="flex flex-col items-center gap-4">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+      </main>
+    );
+  }
+
+  // If already authenticated (e.g. back button after logout + re-login),
+  // the provider will redirect — just render nothing to avoid a flash.
+  if (isLoggedIn) {
+    return null;
+  }
 
   const heading =
     activeView === "login" ? "Welcome Back" : "Create Your Atelier Access";
@@ -80,16 +102,20 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
     }
   }
 
-  async function handleSocialAuth() {
+  async function handleSocialAuth(provider: "google" | "github") {
     setError(null);
     setIsSubmitting(true);
     try {
-      await googleLogin(redirectPath);
+      if (provider === "google") {
+        await googleLogin(redirectPath);
+      } else {
+        await githubLogin(redirectPath);
+      }
     } catch (requestError) {
       setError(
         requestError instanceof Error
           ? requestError.message
-          : "Unable to complete Google authentication.",
+          : `Unable to complete ${provider === "google" ? "Google" : "GitHub"} authentication.`,
       );
     } finally {
       setIsSubmitting(false);
@@ -268,7 +294,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
           <div className="grid grid-cols-2 gap-4">
             <button
               type="button"
-              onClick={handleSocialAuth}
+              onClick={() => handleSocialAuth("google")}
               disabled={isSubmitting}
               className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-surface-container-low text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
             >
@@ -282,7 +308,7 @@ export function AuthPageView({ nextPath }: AuthPageViewProps) {
             </button>
             <button
               type="button"
-              onClick={handleSocialAuth}
+              onClick={() => handleSocialAuth("github")}
               disabled={isSubmitting}
               className="flex h-14 items-center justify-center gap-3 rounded-2xl bg-surface-container-low text-sm font-semibold text-on-surface transition-colors hover:bg-surface-container-high disabled:cursor-not-allowed disabled:opacity-70"
             >

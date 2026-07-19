@@ -6,6 +6,14 @@ export type BackendUser = {
   skillsWanted?: string[];
   bio?: string;
   avatar?: string;
+  firstLoginCompleted?: boolean;
+  isSeeded?: boolean;
+  location?: string;
+  emailVisibility?: "public" | "private";
+  sessionsCompleted?: number;
+  createdAt?: number;
+  averageRating?: number;
+  totalReviews?: number;
 };
 
 export type MockUser = {

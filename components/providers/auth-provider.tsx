@@ -16,6 +16,7 @@ import {
   signInWithEmailAndPassword,
   signInWithPopup,
   GoogleAuthProvider,
+  GithubAuthProvider,
   signOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -25,11 +26,13 @@ import {
   isProtectedPath,
   resolveAuthRedirect,
   setBrowserAuthCookie,
+  clearAllAuthStorage,
 } from "@/lib/auth";
 import type { BackendUser } from "@/lib/mockUser";
 import {
   createUserProfile,
   getUserProfile,
+  updateLastLoginAt,
 } from "@/lib/firebaseServices";
 
 type AuthContextValue = {
@@ -39,6 +42,7 @@ type AuthContextValue = {
   login: (credentials: { email: string; password: string }, redirectTo?: string) => Promise<void>;
   signup: (payload: { name: string; email: string; password: string; skillsOffered?: string[]; skillsWanted?: string[] }, redirectTo?: string) => Promise<void>;
   googleLogin: (redirectTo?: string) => Promise<void>;
+  githubLogin: (redirectTo?: string) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -49,6 +53,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => undefined,
   signup: async () => undefined,
   googleLogin: async () => undefined,
+  githubLogin: async () => undefined,
   logout: async () => undefined,
 });
 
@@ -61,8 +66,14 @@ export function AuthProvider({
 }>) {
   const pathname = usePathname();
   const router = useRouter();
-  const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
+
+  // isAuthReady = false until onAuthStateChanged fires for the first time.
+  // This prevents ANY redirect logic from running before we know the truth.
   const [isAuthReady, setIsAuthReady] = useState(false);
+
+  // We use initialIsLoggedIn only as a UI hint (avoids layout flash on first
+  // paint). Routing decisions always wait for isAuthReady === true.
+  const [isLoggedIn, setIsLoggedIn] = useState(initialIsLoggedIn);
   const [user, setUser] = useState<BackendUser | null>(null);
 
   // Keep refs so the onAuthStateChanged closure always sees the latest values
@@ -72,6 +83,7 @@ export function AuthProvider({
   useEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   useEffect(() => { routerRef.current = router; }, [router]);
 
+  // ─── Sync Firestore profile into context user ──────────────────────────────
   const syncUserFromFirestore = useCallback(async (uid: string, email: string | null) => {
     const profile = await getUserProfile(uid);
     if (profile) {
@@ -81,6 +93,7 @@ export function AuthProvider({
         email: profile.email || email || "",
         skillsOffered: profile.skillsOffered || [],
         skillsWanted: profile.skillsWanted || [],
+        firstLoginCompleted: profile.firstLoginCompleted ?? false,
       });
     } else {
       setUser({
@@ -89,32 +102,49 @@ export function AuthProvider({
         email: email || "",
         skillsOffered: [],
         skillsWanted: [],
+        firstLoginCompleted: false,
       });
     }
   }, []);
 
+  // ─── Single source of truth: onAuthStateChanged ────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        // ── Authenticated ──────────────────────────────────────────────────
         await syncUserFromFirestore(firebaseUser.uid, firebaseUser.email);
+        // Stamp lastLoginAt (fire-and-forget; non-blocking)
+        void updateLastLoginAt(firebaseUser.uid);
         setIsLoggedIn(true);
         setBrowserAuthCookie(true);
 
-        // Gate: if no Firestore doc or profileComplete === false → redirect
+        // Profile-completion gate
         const currentPath = pathnameRef.current;
+        let requiresOnboarding = false;
+
         if (currentPath && !currentPath.startsWith("/complete-profile")) {
           try {
             const profile = await getUserProfile(firebaseUser.uid);
             if (!profile || profile.profileComplete === false) {
+              requiresOnboarding = true;
               routerRef.current.replace("/complete-profile");
             }
           } catch {
             // Non-fatal — profile check failed, don't redirect
           }
         }
+
+        // If auth is ready and user lands on /auth while logged in → dashboard
+        if (currentPath === "/auth" && !requiresOnboarding) {
+          routerRef.current.replace(DEFAULT_AUTH_REDIRECT);
+        }
       } else {
+        // ── Unauthenticated ────────────────────────────────────────────────
+        // Wipe user state first so no stale data leaks to the next account.
         setUser(null);
         setIsLoggedIn(false);
+        // Ensure cookie is killed (belt-and-suspenders in case the explicit
+        // logout path was bypassed, e.g. token expired server-side).
         setBrowserAuthCookie(false);
 
         const currentPath = pathnameRef.current;
@@ -124,39 +154,45 @@ export function AuthProvider({
         }
       }
 
+      // Mark auth as resolved — now the UI can render gated content.
       setIsAuthReady(true);
     });
 
     return () => unsubscribe();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [syncUserFromFirestore]); // intentionally omit pathname/router — use refs instead
+  }, [syncUserFromFirestore]); // intentionally omit pathname/router — use refs
 
-  const login = useCallback(async (credentials: { email: string; password: string }, redirectTo = DEFAULT_AUTH_REDIRECT) => {
+  // ─── Login ─────────────────────────────────────────────────────────────────
+  const login = useCallback(async (
+    credentials: { email: string; password: string },
+    redirectTo = DEFAULT_AUTH_REDIRECT,
+  ) => {
     await signInWithEmailAndPassword(auth, credentials.email, credentials.password);
     router.replace(resolveAuthRedirect(redirectTo));
     router.refresh();
   }, [router]);
 
-  const signup = useCallback(async (payload: { name: string; email: string; password: string; skillsOffered?: string[]; skillsWanted?: string[] }, redirectTo = DEFAULT_AUTH_REDIRECT) => {
+  // ─── Signup ────────────────────────────────────────────────────────────────
+  const signup = useCallback(async (
+    payload: { name: string; email: string; password: string; skillsOffered?: string[]; skillsWanted?: string[] },
+    _redirectTo = DEFAULT_AUTH_REDIRECT,
+  ) => {
     const cred = await createUserWithEmailAndPassword(auth, payload.email, payload.password);
-    // Write initial profile to Firestore
     await createUserProfile(cred.user.uid, { name: payload.name, email: payload.email });
-    // Redirect new users to complete their profile
     router.replace("/complete-profile");
     router.refresh();
   }, [router]);
 
+  // ─── Google Login ──────────────────────────────────────────────────────────
   const googleLogin = useCallback(async (redirectTo = DEFAULT_AUTH_REDIRECT) => {
     const provider = new GoogleAuthProvider();
     const cred = await signInWithPopup(auth, provider);
 
-    // Write initial profile only if the Firestore doc doesn't exist yet
     await createUserProfile(cred.user.uid, {
       name: cred.user.displayName || "SkillCache Member",
       email: cred.user.email || "",
     });
 
-    // Check completion and redirect accordingly
     const profile = await getUserProfile(cred.user.uid);
     if (!profile || profile.profileComplete === false) {
       router.replace("/complete-profile");
@@ -166,11 +202,46 @@ export function AuthProvider({
     router.refresh();
   }, [router]);
 
-  const logout = useCallback(async () => {
-    await signOut(auth);
-    router.replace("/auth");
+  // ─── GitHub Login ──────────────────────────────────────────────────────────
+  const githubLogin = useCallback(async (redirectTo = DEFAULT_AUTH_REDIRECT) => {
+    const provider = new GithubAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+
+    await createUserProfile(cred.user.uid, {
+      name: cred.user.displayName || "SkillCache Member",
+      email: cred.user.email || "",
+    });
+
+    const profile = await getUserProfile(cred.user.uid);
+    if (!profile || profile.profileComplete === false) {
+      router.replace("/complete-profile");
+    } else {
+      router.replace(resolveAuthRedirect(redirectTo));
+    }
     router.refresh();
   }, [router]);
+
+  // ─── Logout ────────────────────────────────────────────────────────────────
+  // Order is critical:
+  //   1. Clear all browser storage so the middleware cookie is gone immediately.
+  //   2. Null out React state so no stale user data flashes.
+  //   3. Call Firebase signOut (which triggers onAuthStateChanged → null).
+  //   4. Only then navigate — the middleware will see no cookie and allow /auth.
+  const logout = useCallback(async () => {
+    // Step 1 — Wipe cookie + localStorage + sessionStorage + IndexedDB.
+    await clearAllAuthStorage();
+
+    // Step 2 — Eagerly clear React state so UI updates instantly.
+    setUser(null);
+    setIsLoggedIn(false);
+
+    // Step 3 — Tell Firebase to invalidate the session.
+    await signOut(auth);
+
+    // Step 4 — Navigate with a full page reload. This prevents Next.js 
+    // client-side cache from retaining old layout/context state.
+    window.location.href = "/auth";
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -180,9 +251,10 @@ export function AuthProvider({
       login,
       signup,
       googleLogin,
+      githubLogin,
       logout,
     }),
-    [user, isLoggedIn, isAuthReady, login, signup, googleLogin, logout]
+    [user, isLoggedIn, isAuthReady, login, signup, googleLogin, githubLogin, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

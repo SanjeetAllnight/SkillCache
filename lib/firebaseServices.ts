@@ -3,6 +3,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  deleteDoc,
   onSnapshot,
   query,
   where,
@@ -10,10 +11,12 @@ import {
   setDoc,
   updateDoc,
   addDoc,
+  writeBatch,
   type FieldValue,
   type Unsubscribe,
 } from "firebase/firestore";
-import { db } from "./firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "./firebase";
 import type { BackendUser } from "./mockUser";
 
 // Define strict types for our collections based on user requirements
@@ -24,35 +27,109 @@ export type FirestoreUser = {
   skillsOffered: string[];
   skillsWanted: string[];
   bio: string;
-  rating: number;
+  rating?: number;
+  averageRating?: number;
+  totalReviews?: number;
   sessionsCompleted: number;
   createdAt?: FieldValue;
+  lastLoginAt?: FieldValue;
   profileComplete?: boolean;
+  /**
+   * false  = brand-new account, has never finished onboarding.
+   * true   = returning user who completed /complete-profile at least once.
+   */
+  firstLoginCompleted?: boolean;
+  isSeeded?: boolean;
+  location?: string;
+  emailVisibility?: "public" | "private";
+  avatar?: string;
 };
 
 /** Real-time call lifecycle state stored on the session document. */
 export type CallStatus = "idle" | "started" | "joined" | "connected";
 
+export type SessionStatus =
+  | "pending"
+  | "accepted"
+  | "upcoming"
+  | "live"
+  | "completed"
+  | "cancelled"
+  | "missed";
+
+export type LegacySessionStatus = "scheduled" | "waiting";
+export type RawSessionStatus = SessionStatus | LegacySessionStatus;
+
 export type FirestoreSession = {
   title: string;
+  description?: string;
   mentorId: string;
   learnerId: string;
   skill: string;
   date: string;
-  status: "live" | "upcoming" | "completed";
+  status: RawSessionStatus;
+  requestedBy?: string;
+  acceptedAt?: FieldValue;
+  startedAt?: FieldValue;
+  endedAt?: FieldValue;
+  cancelledAt?: FieldValue;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  rescheduleNote?: string;
+  mentorJoinedAt?: FieldValue;
+  learnerJoinedAt?: FieldValue;
+  createdAt?: FieldValue;
+  updatedAt?: FieldValue;
   /** Real-time call state — written by participants during a call. */
   callStatus?: CallStatus;
+  isSeeded?: boolean;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
+  participants?: Record<
+    string,
+    {
+      name: string;
+      skills: string[];
+      status: "pending" | "accepted" | "rejected";
+      hasRated?: boolean;
+    }
+  >;
 };
 
 export type ApiSession = {
   _id: string;
   title: string;
+  description?: string;
   mentor: BackendUser;
   learner: BackendUser;
+  mentorId: string;
+  learnerId: string;
+  skill: string;
   date: string;
-  status: "live" | "upcoming" | "completed";
+  status: SessionStatus;
+  rawStatus?: RawSessionStatus;
+  requestedBy?: string;
+  cancelledBy?: string;
+  cancellationReason?: string;
+  rescheduleNote?: string;
   /** Real-time call state — present once a call has been initiated. */
   callStatus?: CallStatus;
+  isSeeded?: boolean;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
+  participants?: Record<
+    string,
+    {
+      name: string;
+      skills: string[];
+      status: "pending" | "accepted" | "rejected";
+      hasRated?: boolean;
+    }
+  >;
 };
 
 export type FirestoreResource = {
@@ -78,12 +155,115 @@ export type ApiResource = {
   authorName: string;
   fileUrl?: string;
   content?: string;
+  createdAt?: number;
+};
+
+// ─── Skill types ──────────────────────────────────────────────────────────────
+
+export type SkillType = "teaching" | "learning";
+export type ExperienceLevel = "beginner" | "intermediate" | "advanced" | "expert";
+
+export type FirestoreSkill = {
+  name: string;
+  category: string;
+  tags: string[];
+  type: SkillType;
+  description: string;
+  level: ExperienceLevel;
+  createdAt?: FieldValue;
+  updatedAt?: FieldValue;
+};
+
+export type ApiSkill = FirestoreSkill & { _id: string };
+
+export type FirestoreWorkshop = {
+  title: string;
+  hostId: string;
+  date: string;
+  durationMinutes: number;
+  participantCount: number;
+  description: string;
+  tags: string[];
+  createdAt?: FieldValue;
+  isSeeded?: boolean;
+};
+
+export type ApiWorkshop = {
+  _id: string;
+  title: string;
+  hostId: string;
+  hostName: string;
+  date: string;
+  durationMinutes: number;
+  participantCount: number;
+  description: string;
+  tags: string[];
+  isSeeded?: boolean;
 };
 
 // Collection references
 const usersCollection = collection(db, "users");
 const sessionsCollection = collection(db, "sessions");
 const resourcesCollection = collection(db, "resources");
+const workshopsCollection = collection(db, "workshops");
+
+function normalizeSessionStatus(status?: RawSessionStatus): SessionStatus {
+  if (status === "scheduled" || status === "waiting") return "upcoming";
+  return status ?? "pending";
+}
+
+function fallbackUser(uid: string, label: string): BackendUser {
+  return {
+    _id: uid,
+    name: label,
+    email: "",
+    skillsOffered: [],
+    skillsWanted: [],
+    isSeeded: false,
+  };
+}
+
+function toApiSession(
+  sessionId: string,
+  data: Partial<FirestoreSession>,
+  usersMap: Map<string, BackendUser>,
+): ApiSession | null {
+  if (!data.mentorId || !data.learnerId) return null;
+
+  const mentor = usersMap.get(data.mentorId) ?? fallbackUser(data.mentorId, "Unknown Mentor");
+  const learner = usersMap.get(data.learnerId) ?? fallbackUser(data.learnerId, "Unknown Learner");
+  const rawStatus = data.status ?? "pending";
+
+  return {
+    _id: sessionId,
+    title: data.title || data.skill || "Untitled Session",
+    description: data.description || "",
+    mentor,
+    learner,
+    mentorId: data.mentorId,
+    learnerId: data.learnerId,
+    skill: data.skill || mentor.skillsOffered?.[0] || "General mentorship",
+    date: data.date ?? new Date().toISOString(),
+    status: normalizeSessionStatus(rawStatus),
+    rawStatus,
+    requestedBy: data.requestedBy,
+    cancelledBy: data.cancelledBy,
+    cancellationReason: data.cancellationReason,
+    rescheduleNote: data.rescheduleNote,
+    callStatus: data.callStatus,
+    isSeeded: data.isSeeded,
+    sessionType: data.sessionType,
+    maxParticipants: data.maxParticipants,
+    visibility: data.visibility,
+    durationMinutes: data.durationMinutes,
+    participants: data.participants,
+  };
+}
+
+function sortSessionsDescending(a: ApiSession, b: ApiSession) {
+  if (a.isSeeded !== b.isSeeded) return a.isSeeded ? 1 : -1;
+  return new Date(b.date).getTime() - new Date(a.date).getTime();
+}
 
 // ─── Profile helpers ──────────────────────────────────────────────────────────
 
@@ -108,10 +288,32 @@ export async function createUserProfile(
       rating: 0,
       sessionsCompleted: 0,
       profileComplete: false,
+      firstLoginCompleted: false,
       createdAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
     },
     { merge: true }
   );
+}
+
+/**
+ * Called when an existing user logs back in.
+ * Stamps lastLoginAt without touching any other field.
+ */
+export async function updateLastLoginAt(uid: string): Promise<void> {
+  try {
+    await updateDoc(doc(db, "users", uid), { lastLoginAt: serverTimestamp() });
+  } catch {
+    // Non-fatal — don't block the login flow if this fails
+  }
+}
+
+/**
+ * Called by /complete-profile after the user saves their onboarding data.
+ * Marks the account as a returning user so the dashboard shows "Welcome back".
+ */
+export async function markFirstLoginCompleted(uid: string): Promise<void> {
+  await updateDoc(doc(db, "users", uid), { firstLoginCompleted: true });
 }
 
 /**
@@ -131,7 +333,15 @@ export async function getUserProfile(
  */
 export async function updateUserProfile(
   uid: string,
-  data: { skillsOffered: string[]; skillsWanted: string[]; bio: string }
+  data: Partial<{
+    name: string;
+    skillsOffered: string[];
+    skillsWanted: string[];
+    bio: string;
+    location: string;
+    emailVisibility: "public" | "private";
+    avatar: string;
+  }>
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), {
     ...data,
@@ -144,17 +354,26 @@ export async function updateUserProfile(
  */
 export async function getUsers(): Promise<BackendUser[]> {
   const snapshot = await getDocs(usersCollection);
-  return snapshot.docs.map((d) => {
-    const data = d.data() as FirestoreUser;
-    return {
-      _id: d.id,
-      name: data.name,
-      email: data.email,
-      skillsOffered: data.skillsOffered || [],
-      skillsWanted: data.skillsWanted || [],
-      // map rating/completed to UI requirements if necessary
-    };
-  });
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data() as FirestoreUser;
+      return {
+        _id: d.id,
+        name: data.name,
+        email: data.email,
+        skillsOffered: data.skillsOffered || [],
+        skillsWanted: data.skillsWanted || [],
+        isSeeded: data.isSeeded,
+        avatar: data.avatar,
+        location: data.location,
+        emailVisibility: data.emailVisibility,
+        sessionsCompleted: data.sessionsCompleted || 0,
+        createdAt: data.createdAt ? (data.createdAt as any).toMillis() : undefined,
+        averageRating: data.averageRating ?? 0,
+        totalReviews: data.totalReviews ?? 0,
+      };
+    })
+    .sort((a, b) => (a.isSeeded ? 1 : 0) - (b.isSeeded ? 1 : 0));
 }
 
 /**
@@ -172,6 +391,13 @@ export async function getUserById(userId: string): Promise<BackendUser | null> {
     skillsOffered: data.skillsOffered || [],
     skillsWanted: data.skillsWanted || [],
     bio: data.bio || "",
+    avatar: data.avatar,
+    location: data.location,
+    emailVisibility: data.emailVisibility,
+    sessionsCompleted: data.sessionsCompleted || 0,
+    createdAt: data.createdAt ? (data.createdAt as any).toMillis() : undefined,
+    averageRating: data.averageRating ?? 0,
+    totalReviews: data.totalReviews ?? 0,
   };
 }
 
@@ -216,23 +442,10 @@ export async function getSessions() {
   const allUsers = await getUsers();
   const usersMap = new Map(allUsers.map(u => [u._id, u]));
   
-  return sessionsData.map(session => {
-    const mentor = usersMap.get(session.mentorId) || {
-      _id: session.mentorId, name: "Unknown Mentor", email: "", skillsOffered: [], skillsWanted: []
-    };
-    const learner = usersMap.get(session.learnerId) || {
-      _id: session.learnerId, name: "Unknown Learner", email: "", skillsOffered: [], skillsWanted: []
-    };
-    
-    return {
-      _id: session._id,
-      title: session.title || session.skill,
-      mentor,
-      learner,
-      date: session.date,
-      status: session.status
-    };
-  });
+  return sessionsData
+    .map((session) => toApiSession(session._id, session, usersMap))
+    .filter((session): session is ApiSession => Boolean(session))
+    .sort(sortSessionsDescending);
 }
 
 /**
@@ -242,18 +455,45 @@ export async function getSessions() {
 export async function createSession(
   data: {
     title: string;
+    description?: string;
     mentorId: string;
     learnerId: string;
     skill: string;
     date: string;
-    status: "upcoming" | "live" | "completed";
+    status: SessionStatus;
+    requestedBy?: string;
+    sessionType?: "private" | "public";
+    maxParticipants?: number;
+    visibility?: "private" | "public";
+    durationMinutes?: number;
   }
 ): Promise<string> {
   const docRef = await addDoc(sessionsCollection, {
     ...data,
+    callStatus: "idle",
     createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
   });
   return docRef.id;
+}
+
+export async function requestSession(data: {
+  title: string;
+  description?: string;
+  mentorId: string;
+  learnerId: string;
+  skill: string;
+  date: string;
+  sessionType?: "private" | "public";
+  maxParticipants?: number;
+  visibility?: "private" | "public";
+  durationMinutes?: number;
+}): Promise<string> {
+  return createSession({
+    ...data,
+    status: "pending",
+    requestedBy: data.learnerId,
+  });
 }
 
 /**
@@ -296,20 +536,335 @@ export async function getSessionsForUser(uid: string): Promise<ApiSession[]> {
   }
 
   return raw
-    .map((session) => ({
-      _id: session._id,
-      title: session.title || session.skill || "Untitled Session",
-      mentor: usersMap.get(session.mentorId) ?? {
-        _id: session.mentorId, name: "Unknown Mentor", email: "", skillsOffered: [], skillsWanted: [],
+    .map((session) => toApiSession(session._id, session, usersMap))
+    .filter((session): session is ApiSession => Boolean(session))
+    .sort(sortSessionsDescending);
+}
+
+export const SESSION_JOIN_WINDOW_MS = 15 * 60 * 1000;
+export const SESSION_MISS_GRACE_MS = 2 * 60 * 60 * 1000;
+
+export function canJoinSession(session: ApiSession, now = Date.now()) {
+  const startsAt = new Date(session.date).getTime();
+  if (!Number.isFinite(startsAt)) return false;
+  if (session.status === "live") return true;
+  if (session.status !== "accepted" && session.status !== "upcoming") return false;
+  return now >= startsAt - SESSION_JOIN_WINDOW_MS && now <= startsAt + SESSION_MISS_GRACE_MS;
+}
+
+export function getSessionTimeLabel(session: ApiSession, now = Date.now()) {
+  const startsAt = new Date(session.date).getTime();
+  if (!Number.isFinite(startsAt)) return "Time pending";
+
+  if (session.status === "pending") return "Awaiting mentor response";
+  if (session.status === "live") return "Session Live";
+  if (session.status === "completed") return "Completed";
+  if (session.status === "cancelled") return "Cancelled";
+  if (session.status === "missed") return "Missed";
+
+  const diff = startsAt - now;
+  const absoluteMinutes = Math.max(1, Math.round(Math.abs(diff) / 60000));
+
+  if (diff > SESSION_JOIN_WINDOW_MS) {
+    const hours = Math.floor(absoluteMinutes / 60);
+    if (hours >= 24) return `Starts in ${Math.round(hours / 24)} day${Math.round(hours / 24) === 1 ? "" : "s"}`;
+    if (hours >= 1) return `Starts in ${hours} hour${hours === 1 ? "" : "s"}`;
+    return `Starts in ${absoluteMinutes} minutes`;
+  }
+
+  if (diff > 0) return `Starts in ${absoluteMinutes} minutes`;
+  if (now <= startsAt + SESSION_MISS_GRACE_MS) return "Ready to start";
+  return "Past session window";
+}
+
+export async function acceptSession(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "accepted",
+    acceptedAt: serverTimestamp(),
+    callStatus: "idle",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function startLiveSession(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "live",
+    startedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function endLiveSession(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "completed",
+    completedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function requestToJoinSession(sessionId: string, user: BackendUser): Promise<void> {
+  await setDoc(
+    doc(db, "sessions", sessionId),
+    {
+      participants: {
+        [user._id]: {
+          name: user.name,
+          skills: user.skillsWanted || [],
+          status: "pending",
+        },
       },
-      learner: usersMap.get(session.learnerId) ?? {
-        _id: session.learnerId, name: "Unknown Learner", email: "", skillsOffered: [], skillsWanted: [],
-      },
-      date: session.date ?? new Date().toISOString(),
-      status: session.status ?? "upcoming",
-      callStatus: session.callStatus,
-    }))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    },
+    { merge: true }
+  );
+}
+
+export async function updateSessionParticipant(
+  sessionId: string,
+  userId: string,
+  status: "accepted" | "rejected"
+): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    [`participants.${userId}.status`]: status,
+  });
+}
+
+export type SessionRatingData = {
+  sessionId: string;
+  mentorId: string;
+  learnerId: string;
+  mentorRating: number;
+  sessionRating: number;
+  feedback?: string;
+};
+
+export async function submitSessionRating(userId: string, data: SessionRatingData): Promise<void> {
+  const batch = writeBatch(db);
+  
+  // 1. Create rating doc
+  const ratingRef = doc(collection(db, "session_ratings"));
+  batch.set(ratingRef, {
+    ...data,
+    reviewerId: userId,
+    createdAt: serverTimestamp(),
+  });
+
+  // 2. Mark participant as having rated
+  const sessionRef = doc(db, "sessions", data.sessionId);
+  batch.update(sessionRef, {
+    [`participants.${userId}.hasRated`]: true,
+  });
+
+  await batch.commit();
+}
+
+export async function cancelSession(
+  sessionId: string,
+  userId: string,
+  reason = "Session cancelled",
+): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "cancelled",
+    cancelledBy: userId,
+    cancellationReason: reason,
+    cancelledAt: serverTimestamp(),
+    callStatus: "idle",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function rescheduleSession(
+  sessionId: string,
+  date: string,
+  note?: string,
+): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    date,
+    status: "accepted",
+    rescheduleNote: note ?? "",
+    callStatus: "idle",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function promoteSessionToUpcoming(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "upcoming",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function markSessionMissed(sessionId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "missed",
+    callStatus: "idle",
+    missedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function startSession(sessionId: string, userId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "live",
+    callStatus: "started",
+    mentorJoinedAt: serverTimestamp(),
+    startedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function completeSession(sessionId: string, userId: string): Promise<void> {
+  await updateDoc(doc(db, "sessions", sessionId), {
+    status: "completed",
+    callStatus: "idle",
+    endedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function syncSessionLifecycle(session: ApiSession, now = Date.now()): Promise<void> {
+  const startsAt = new Date(session.date).getTime();
+  if (!Number.isFinite(startsAt)) return;
+
+  const shouldBecomeUpcoming =
+    session.status === "accepted" &&
+    now >= startsAt - SESSION_JOIN_WINDOW_MS &&
+    now <= startsAt + SESSION_MISS_GRACE_MS;
+
+  if (shouldBecomeUpcoming) {
+    await promoteSessionToUpcoming(session._id);
+    return;
+  }
+
+  const shouldBeMissed =
+    (session.status === "accepted" || session.status === "upcoming") &&
+    now > startsAt + SESSION_MISS_GRACE_MS;
+
+  if (shouldBeMissed) {
+    await markSessionMissed(session._id);
+  }
+}
+
+export async function syncSessionLifecycles(sessions: ApiSession[]): Promise<void> {
+  await Promise.allSettled(sessions.map((session) => syncSessionLifecycle(session)));
+}
+
+export function listenSessionsForUser(
+  uid: string,
+  onChange: (sessions: ApiSession[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  if (!uid) return () => undefined;
+
+  const mentorDocs = new Map<string, FirestoreSession>();
+  const learnerDocs = new Map<string, FirestoreSession>();
+  let cancelled = false;
+  const usersPromise = getUsers()
+    .then((users) => new Map(users.map((user) => [user._id, user])))
+    .catch(() => new Map<string, BackendUser>());
+
+  async function emit() {
+    const usersMap = await usersPromise;
+    if (cancelled) return;
+
+    const merged = new Map<string, FirestoreSession>();
+    mentorDocs.forEach((value, key) => merged.set(key, value));
+    learnerDocs.forEach((value, key) => merged.set(key, value));
+
+    const nextSessions = Array.from(merged.entries())
+      .map(([sessionId, data]) => toApiSession(sessionId, data, usersMap))
+      .filter((session): session is ApiSession => Boolean(session))
+      .sort(sortSessionsDescending);
+
+    onChange(nextSessions);
+  }
+
+  function applySnapshot(target: Map<string, FirestoreSession>, snapshot: Awaited<ReturnType<typeof getDocs>>) {
+    snapshot.docChanges().forEach((change) => {
+      if (change.type === "removed") {
+        target.delete(change.doc.id);
+        return;
+      }
+      target.set(change.doc.id, change.doc.data() as FirestoreSession);
+    });
+    void emit();
+  }
+
+  const unsubscribeMentor = onSnapshot(
+    query(sessionsCollection, where("mentorId", "==", uid)),
+    (snapshot) => applySnapshot(mentorDocs, snapshot),
+    (error) => onError?.(error),
+  );
+
+  const unsubscribeLearner = onSnapshot(
+    query(sessionsCollection, where("learnerId", "==", uid)),
+    (snapshot) => applySnapshot(learnerDocs, snapshot),
+    (error) => onError?.(error),
+  );
+
+  return () => {
+    cancelled = true;
+    unsubscribeMentor();
+    unsubscribeLearner();
+  };
+}
+
+export function listenPublicSessions(
+  onChange: (sessions: ApiSession[]) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  let cancelled = false;
+  const usersPromise = getUsers()
+    .then((users) => new Map(users.map((user) => [user._id, user])))
+    .catch(() => new Map<string, BackendUser>());
+
+  return onSnapshot(
+    query(sessionsCollection, where("sessionType", "==", "public")),
+    async (snapshot) => {
+      const usersMap = await usersPromise;
+      if (cancelled) return;
+      
+      const sessions = snapshot.docs
+        .map((d) => toApiSession(d.id, d.data() as FirestoreSession, usersMap))
+        .filter((s): s is ApiSession => Boolean(s))
+        .sort(sortSessionsDescending);
+        
+      onChange(sessions);
+    },
+    (error) => onError?.(error),
+  );
+}
+
+export function listenSessionById(
+  sessionId: string,
+  onChange: (session: ApiSession | null) => void,
+  onError?: (error: Error) => void,
+): Unsubscribe {
+  if (!sessionId) return () => undefined;
+
+  let cancelled = false;
+  const usersPromise = getUsers()
+    .then((users) => new Map(users.map((user) => [user._id, user])))
+    .catch(() => new Map<string, BackendUser>());
+
+  const unsubscribe = onSnapshot(
+    doc(db, "sessions", sessionId),
+    async (snapshot) => {
+      if (!snapshot.exists()) {
+        onChange(null);
+        return;
+      }
+
+      const usersMap = await usersPromise;
+      if (cancelled) return;
+      onChange(toApiSession(snapshot.id, snapshot.data() as FirestoreSession, usersMap));
+    },
+    (error) => onError?.(error),
+  );
+
+  return () => {
+    cancelled = true;
+    unsubscribe();
+  };
 }
 
 /**
@@ -327,6 +882,15 @@ export async function getResources(): Promise<ApiResource[]> {
   return snapshot.docs
     .map((d) => {
       const data = d.data() as FirestoreResource;
+      
+      // Handle local pending writes where serverTimestamp() is null
+      let createdAtMillis = 0;
+      if (data.createdAt && typeof (data.createdAt as any).toMillis === 'function') {
+        createdAtMillis = (data.createdAt as any).toMillis();
+      } else if (d.metadata.hasPendingWrites) {
+        createdAtMillis = Date.now();
+      }
+
       return {
         _id: d.id,
         title: data.title,
@@ -336,11 +900,12 @@ export async function getResources(): Promise<ApiResource[]> {
         authorName: usersMap.get(data.userId) ?? "Unknown Author",
         fileUrl: data.fileUrl,
         content: data.content,
+        createdAt: createdAtMillis,
       } satisfies ApiResource;
     })
     .sort((a, b) => {
-      // fall back if createdAt not present (existing docs)
-      return 0;
+      // sort newest first (descending by createdAt)
+      return (b.createdAt || 0) - (a.createdAt || 0);
     });
 }
 
@@ -355,21 +920,129 @@ export async function addResource(data: {
   fileUrl?: string;
   content?: string;
 }): Promise<string> {
-  const docRef = await addDoc(resourcesCollection, {
-    ...data,
+  const payload: any = {
+    title: data.title,
+    description: data.description,
+    tags: data.tags,
+    userId: data.userId,
     createdAt: serverTimestamp(),
-  });
+  };
+  if (data.fileUrl !== undefined) payload.fileUrl = data.fileUrl;
+  if (data.content !== undefined) payload.content = data.content;
+
+  const docRef = await addDoc(resourcesCollection, payload);
   return docRef.id;
+}
+
+/**
+ * Upload a file to Firebase Storage for the repository.
+ * Returns the download URL.
+ */
+export async function uploadResourceFile(userId: string, file: File): Promise<string> {
+  const fileName = `${Date.now()}_${file.name}`;
+  const storageRef = ref(storage, `resources/${userId}/${fileName}`);
+  const snapshot = await uploadBytes(storageRef, file);
+  const downloadUrl = await getDownloadURL(snapshot.ref);
+  return downloadUrl;
 }
 
 /**
  * Fetch a single session by Id
  */
 export async function getSessionById(sessionId: string): Promise<ApiSession> {
-  const allSessions = await getSessions();
-  const session = allSessions.find(s => s._id === sessionId);
+  const sessionSnap = await getDoc(doc(db, "sessions", sessionId));
+  if (!sessionSnap.exists()) throw new Error("Session not found");
+
+  let usersMap = new Map<string, BackendUser>();
+  try {
+    const allUsers = await getUsers();
+    usersMap = new Map(allUsers.map((u) => [u._id, u]));
+  } catch {
+    // Non-fatal - session still displays with participant placeholders.
+  }
+
+  const session = toApiSession(sessionSnap.id, sessionSnap.data() as FirestoreSession, usersMap);
   if (!session) throw new Error("Session not found");
   return session;
+}
+
+// ─── Workshops ────────────────────────────────────────────────────────────────
+
+export async function getWorkshops(): Promise<ApiWorkshop[]> {
+  const snapshot = await getDocs(workshopsCollection);
+  if (snapshot.empty) return [];
+
+  const allUsers = await getUsers();
+  const usersMap = new Map(allUsers.map((u) => [u._id, u.name]));
+
+  return snapshot.docs
+    .map((d) => {
+      const data = d.data() as FirestoreWorkshop;
+      return {
+        _id: d.id,
+        title: data.title,
+        hostId: data.hostId,
+        hostName: usersMap.get(data.hostId) ?? "Unknown Host",
+        date: data.date,
+        durationMinutes: data.durationMinutes,
+        participantCount: data.participantCount,
+        description: data.description,
+        tags: data.tags || [],
+        isSeeded: data.isSeeded,
+      } satisfies ApiWorkshop;
+    })
+    .sort((a, b) => {
+      if (a.isSeeded !== b.isSeeded) return a.isSeeded ? 1 : -1;
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
+}
+
+export async function addWorkshop(data: Omit<FirestoreWorkshop, "createdAt">): Promise<string> {
+  const docRef = await addDoc(workshopsCollection, {
+    ...data,
+    createdAt: serverTimestamp(),
+  });
+  return docRef.id;
+}
+
+export async function seedDemoWorkshops(hostId: string): Promise<void> {
+  const snapshot = await getDocs(workshopsCollection);
+  if (!snapshot.empty) return; // Already seeded
+
+  const now = Date.now();
+  const templates = [
+    {
+      title: "Mastering React Hooks",
+      hostId,
+      date: new Date(now + 2 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 60,
+      participantCount: 12,
+      description: "Deep dive into custom hooks, context, and performance optimization.",
+      tags: ["React", "JavaScript", "Frontend"],
+    },
+    {
+      title: "Introduction to Figma Auto Layout",
+      hostId,
+      date: new Date(now + 5 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 45,
+      participantCount: 8,
+      description: "Learn how to build responsive UI components using Figma's Auto Layout feature.",
+      tags: ["Figma", "Design", "UI/UX"],
+    },
+    {
+      title: "Building Resilient APIs with Node.js",
+      hostId,
+      date: new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      durationMinutes: 90,
+      participantCount: 20,
+      description: "Best practices for error handling, rate limiting, and testing in Node.js.",
+      tags: ["Node.js", "Backend", "API"],
+    },
+  ];
+
+  for (const template of templates) {
+    await addWorkshop(template);
+  }
 }
 
 // ─── Call status helpers ──────────────────────────────────────────────────────
@@ -409,4 +1082,331 @@ export function listenToSessionCallStatus(
     const data = snap.data() as FirestoreSession;
     onChange(data.callStatus ?? null);
   });
+}
+
+// \u2500\u2500\u2500 Skill CRUD helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/** Returns the Firestore sub-collection reference for a user's skills. */
+function skillsColRef(uid: string) {
+  return collection(db, "users", uid, "skills");
+}
+
+/**
+ * Sync the flat skillsOffered / skillsWanted arrays on the user doc so that
+ * the existing mentor search and session-booking flows keep working unchanged.
+ */
+async function syncSkillArrays(uid: string): Promise<void> {
+  const snap = await getDocs(skillsColRef(uid));
+  const skills = snap.docs.map((d) => d.data() as FirestoreSkill);
+  const offered = skills.filter((s) => s.type === "teaching").map((s) => s.name);
+  const wanted  = skills.filter((s) => s.type === "learning").map((s) => s.name);
+  await updateDoc(doc(db, "users", uid), {
+    skillsOffered: offered,
+    skillsWanted:  wanted,
+    profileComplete: true,
+  });
+}
+
+/** Fetch all skills for a user (one-shot). */
+export async function getSkillsForUser(uid: string): Promise<ApiSkill[]> {
+  const snap = await getDocs(skillsColRef(uid));
+  return snap.docs.map((d) => ({ _id: d.id, ...(d.data() as FirestoreSkill) }));
+}
+
+/** Add a new skill. Returns the completed ApiSkill object. */
+export async function addSkill(
+  uid: string,
+  data: Omit<FirestoreSkill, "createdAt" | "updatedAt">,
+): Promise<ApiSkill> {
+  const ref = await addDoc(skillsColRef(uid), {
+    ...data,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+  await syncSkillArrays(uid);
+  return { _id: ref.id, ...data };
+}
+
+/** Update an existing skill in place. */
+export async function updateSkill(
+  uid: string,
+  skillId: string,
+  data: Partial<Omit<FirestoreSkill, "createdAt" | "updatedAt">>,
+): Promise<void> {
+  await updateDoc(doc(db, "users", uid, "skills", skillId), {
+    ...data,
+    updatedAt: serverTimestamp(),
+  });
+  await syncSkillArrays(uid);
+}
+
+/** Delete a skill by its document ID. */
+export async function deleteSkill(uid: string, skillId: string): Promise<void> {
+  await deleteDoc(doc(db, "users", uid, "skills", skillId));
+  await syncSkillArrays(uid);
+}
+
+/**
+ * Subscribe to real-time skill updates for a user.
+ * Returns an unsubscribe function — call it on cleanup.
+ */
+export function listenSkillsForUser(
+  uid: string,
+  onChange: (skills: ApiSkill[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  if (!uid) return () => undefined;
+  return onSnapshot(
+    skillsColRef(uid),
+    (snap) => {
+      const skills = snap.docs.map((d) => ({
+        _id: d.id,
+        ...(d.data() as FirestoreSkill),
+      }));
+      onChange(skills);
+     },
+    (err) => onError?.(err),
+  );
+}
+
+// \u2500\u2500\u2500 Legacy migration \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+
+/**
+ * One-time migration: if the user's skills sub-collection is empty but they
+ * have legacy skillsOffered / skillsWanted strings on their user document,
+ * this seeds the sub-collection with those values.
+ *
+ * Safe to call on every profile load — it no-ops when the sub-collection
+ * already has entries.  Returns true if migration was performed.
+ */
+export async function migrateSkillsFromLegacy(uid: string): Promise<boolean> {
+  const colRef = skillsColRef(uid);
+
+  // 1. Check whether the sub-collection already has data
+  const existing = await getDocs(colRef);
+  if (!existing.empty) return false; // already migrated — nothing to do
+
+  // 2. Fetch the top-level user document for legacy arrays
+  const userSnap = await getDoc(doc(db, "users", uid));
+  if (!userSnap.exists()) return false;
+
+  const data = userSnap.data() as FirestoreUser;
+  const offered: string[] = data.skillsOffered ?? [];
+  const wanted: string[]  = data.skillsWanted  ?? [];
+
+  if (offered.length === 0 && wanted.length === 0) return false;
+
+  // 3. Seed — deduplicate across both arrays
+  const seen = new Set<string>();
+  const writes: Promise<unknown>[] = [];
+
+  for (const name of offered) {
+    const key = name.toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    writes.push(
+      addDoc(colRef, {
+        name:        name.trim(),
+        category:    "Other",
+        tags:        [],
+        type:        "teaching" as SkillType,
+        description: "",
+        level:       "intermediate" as ExperienceLevel,
+        createdAt:   serverTimestamp(),
+        updatedAt:   serverTimestamp(),
+      }),
+    );
+  }
+
+  for (const name of wanted) {
+    const key = name.toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    writes.push(
+      addDoc(colRef, {
+        name:        name.trim(),
+        category:    "Other",
+        tags:        [],
+        type:        "learning" as SkillType,
+        description: "",
+        level:       "beginner" as ExperienceLevel,
+        createdAt:   serverTimestamp(),
+        updatedAt:   serverTimestamp(),
+      }),
+    );
+  }
+
+  await Promise.all(writes);
+  // No need to re-sync arrays here — the legacy arrays already contain the same strings
+  return true;
+}
+
+// ─── Review / Rating system ──────────────────────────────────────────────────
+
+export type FirestoreReview = {
+  reviewerUid: string;
+  reviewerName: string;
+  rating: number;          // 1–5
+  reviewText: string;
+  sessionId?: string | null;
+  createdAt?: unknown;
+};
+
+export type ApiReview = FirestoreReview & {
+  _id: string;
+  createdAtMillis: number;
+};
+
+export type MentorRatingMeta = {
+  averageRating: number;
+  totalReviews: number;
+};
+
+function reviewsColRef(mentorUid: string) {
+  return collection(db, "users", mentorUid, "reviews");
+}
+
+function toMillis(value: unknown): number {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  return 0;
+}
+
+function normalizeReview(id: string, data: Partial<FirestoreReview> & Record<string, unknown>): ApiReview {
+  return {
+    _id: id,
+    reviewerUid: String(data.reviewerUid ?? ""),
+    reviewerName: String(data.reviewerName ?? "Anonymous"),
+    rating: Number(data.rating ?? 0),
+    reviewText: String(data.reviewText ?? ""),
+    sessionId: typeof data.sessionId === "string" ? data.sessionId : null,
+    createdAt: data.createdAt,
+    createdAtMillis: toMillis(data.createdAt),
+  };
+}
+
+/**
+ * Check whether the given user has already submitted a review for this mentor.
+ */
+export async function hasUserReviewedMentor(
+  mentorUid: string,
+  reviewerUid: string,
+): Promise<boolean> {
+  const snap = await getDocs(
+    query(reviewsColRef(mentorUid), where("reviewerUid", "==", reviewerUid)),
+  );
+  return !snap.empty;
+}
+
+/**
+ * Submit a new review for a mentor.
+ * - Prevents self-review (throws)
+ * - Prevents duplicate reviews (throws)
+ * - Atomically updates averageRating and totalReviews on the mentor document
+ */
+export async function submitReview(
+  mentorUid: string,
+  reviewer: { uid: string; name: string },
+  input: { rating: number; reviewText: string; sessionId?: string | null },
+): Promise<ApiReview> {
+  if (mentorUid === reviewer.uid) {
+    throw new Error("You cannot review yourself.");
+  }
+  if (input.rating < 1 || input.rating > 5) {
+    throw new Error("Please select a star rating before submitting.");
+  }
+  if (!input.reviewText.trim() || input.reviewText.trim().length < 5) {
+    throw new Error("Please write at least 5 characters in your review.");
+  }
+  if (input.reviewText.length > 300) {
+    throw new Error("Reviews must be 300 characters or fewer.");
+  }
+
+  // Duplicate guard
+  const alreadyReviewed = await hasUserReviewedMentor(mentorUid, reviewer.uid);
+  if (alreadyReviewed) {
+    throw new Error("You've already reviewed this mentor.");
+  }
+
+  // Write the review document
+  const colRef = reviewsColRef(mentorUid);
+  const docRef = await addDoc(colRef, {
+    reviewerUid: reviewer.uid,
+    reviewerName: reviewer.name,
+    rating: input.rating,
+    reviewText: input.reviewText.trim(),
+    sessionId: input.sessionId ?? null,
+    createdAt: serverTimestamp(),
+  } satisfies Omit<FirestoreReview, "_id">);
+
+  // Atomically recalculate average on the mentor user doc
+  const mentorRef = doc(db, "users", mentorUid);
+  const mentorSnap = await getDoc(mentorRef);
+  const mentorData = mentorSnap.data() ?? {};
+  const prevTotal: number = Number(mentorData.totalReviews ?? 0);
+  const prevAvg: number = Number(mentorData.averageRating ?? 0);
+  const newTotal = prevTotal + 1;
+  const newAvg = parseFloat(((prevAvg * prevTotal + input.rating) / newTotal).toFixed(2));
+
+  await updateDoc(mentorRef, {
+    averageRating: newAvg,
+    totalReviews: newTotal,
+  });
+
+  return {
+    _id: docRef.id,
+    reviewerUid: reviewer.uid,
+    reviewerName: reviewer.name,
+    rating: input.rating,
+    reviewText: input.reviewText.trim(),
+    sessionId: input.sessionId ?? null,
+    createdAt: null,
+    createdAtMillis: Date.now(),
+  };
+}
+
+/**
+ * Fetch all reviews for a mentor (one-time read, sorted newest-first).
+ */
+export async function getReviewsForMentor(mentorUid: string): Promise<ApiReview[]> {
+  const snap = await getDocs(reviewsColRef(mentorUid));
+  return snap.docs
+    .map((d) => normalizeReview(d.id, d.data()))
+    .sort((a, b) => b.createdAtMillis - a.createdAtMillis);
+}
+
+/**
+ * Real-time listener for a mentor's reviews.
+ */
+export function listenReviewsForMentor(
+  mentorUid: string,
+  onChange: (reviews: ApiReview[]) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return onSnapshot(
+    reviewsColRef(mentorUid),
+    (snap) => {
+      const reviews = snap.docs
+        .map((d) => normalizeReview(d.id, d.data()))
+        .sort((a, b) => b.createdAtMillis - a.createdAtMillis);
+      onChange(reviews);
+    },
+    (err) => onError?.(err),
+  );
+}
+
+/**
+ * Read averageRating + totalReviews from a mentor's user document.
+ */
+export async function getMentorRatingMeta(mentorUid: string): Promise<MentorRatingMeta> {
+  const snap = await getDoc(doc(db, "users", mentorUid));
+  if (!snap.exists()) return { averageRating: 0, totalReviews: 0 };
+  const data = snap.data();
+  return {
+    averageRating: Number(data.averageRating ?? 0),
+    totalReviews: Number(data.totalReviews ?? 0),
+  };
 }
