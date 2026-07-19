@@ -56,11 +56,26 @@ type FeaturedSession = {
   detailHref?: string;
 };
 
+type PendingSession = {
+  variant: "pending";
+  id: string;
+  title: string;
+  partnerName: string;
+  date: string;
+  time: string;
+  avatar: string;
+  isMentor: boolean;
+  onAccept?: () => void;
+  onDecline?: () => void;
+  actionDisabled?: boolean;
+};
+
 export type SessionCardData =
   | DashboardSession
   | UpcomingSession
   | PastSession
-  | FeaturedSession;
+  | FeaturedSession
+  | PendingSession;
 
 type SessionCardProps = {
   session: SessionCardData;
@@ -158,6 +173,70 @@ export function SessionCard({ session }: SessionCardProps) {
           >
             Details <Icon name="arrow_forward" className="text-sm" />
           </Link>
+        </div>
+      </article>
+    );
+  }
+
+  if (session.variant === "pending") {
+    return (
+      <article className="rounded-2xl border-2 border-dashed border-outline-variant/30 bg-surface-container-lowest p-6 transition-all hover:border-primary/50">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h5 className="font-headline text-lg font-bold text-on-surface">
+              {session.title}
+            </h5>
+            <p className="text-sm text-on-surface-variant">
+              {session.isMentor ? `Learner: ${session.partnerName}` : `Mentor: ${session.partnerName}`}
+            </p>
+          </div>
+          <div className="text-right text-xs">
+            <p className="font-bold text-on-surface">{session.date}</p>
+            <p className="text-stone-400">{session.time}</p>
+          </div>
+        </div>
+        <div className="flex items-center justify-between border-t border-surface-container pt-4">
+          {isValidUrl(session.avatar) ? (
+            <Image
+              src={session.avatar}
+              alt={session.partnerName}
+              width={32}
+              height={32}
+              className="h-8 w-8 rounded-full border-2 border-surface-container-lowest object-cover"
+            />
+          ) : (
+            <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-surface-container-lowest bg-surface-container-high text-xs font-bold text-on-surface">
+              {session.partnerName[0]?.toUpperCase() ?? "?"}
+            </div>
+          )}
+          
+          <div className="flex items-center gap-3">
+            {session.isMentor ? (
+              <>
+                <button
+                  type="button"
+                  onClick={session.onDecline}
+                  disabled={session.actionDisabled}
+                  className="rounded-lg px-4 py-1.5 text-sm font-semibold text-stone-400 transition hover:bg-surface-container hover:text-on-surface disabled:opacity-50"
+                >
+                  Decline
+                </button>
+                <button
+                  type="button"
+                  onClick={session.onAccept}
+                  disabled={session.actionDisabled}
+                  className="rounded-lg bg-primary px-4 py-1.5 text-sm font-bold text-on-primary shadow transition hover:opacity-90 disabled:opacity-50"
+                >
+                  Accept
+                </button>
+              </>
+            ) : (
+              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-widest text-amber-500">
+                <Icon name="schedule" className="text-[14px]" />
+                Awaiting approval
+              </span>
+            )}
+          </div>
         </div>
       </article>
     );

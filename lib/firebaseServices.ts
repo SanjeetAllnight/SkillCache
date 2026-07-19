@@ -55,6 +55,7 @@ export type SessionStatus =
   | "live"
   | "completed"
   | "cancelled"
+  | "declined"
   | "missed";
 
 export type LegacySessionStatus = "scheduled" | "waiting";
@@ -70,6 +71,7 @@ export type FirestoreSession = {
   status: RawSessionStatus;
   requestedBy?: string;
   acceptedAt?: FieldValue;
+  declinedAt?: FieldValue;
   startedAt?: FieldValue;
   endedAt?: FieldValue;
   cancelledAt?: FieldValue;
@@ -114,6 +116,7 @@ export type ApiSession = {
   cancelledBy?: string;
   cancellationReason?: string;
   rescheduleNote?: string;
+  endedAt?: number;
   /** Real-time call state — present once a call has been initiated. */
   callStatus?: CallStatus;
   isSeeded?: boolean;
@@ -250,6 +253,7 @@ function toApiSession(
     cancelledBy: data.cancelledBy,
     cancellationReason: data.cancellationReason,
     rescheduleNote: data.rescheduleNote,
+    endedAt: data.endedAt ? (data.endedAt as any).toMillis?.() : undefined,
     callStatus: data.callStatus,
     isSeeded: data.isSeeded,
     sessionType: data.sessionType,
@@ -577,11 +581,33 @@ export function getSessionTimeLabel(session: ApiSession, now = Date.now()) {
   return "Past session window";
 }
 
-export async function acceptSession(sessionId: string): Promise<void> {
-  await updateDoc(doc(db, "sessions", sessionId), {
-    status: "accepted",
+export async function acceptSession(sessionId: string, userId: string): Promise<void> {
+  const sessionRef = doc(db, "sessions", sessionId);
+  const sessionSnap = await getDoc(sessionRef);
+  if (!sessionSnap.exists()) throw new Error("Session not found");
+  if (sessionSnap.data().mentorId !== userId) {
+    throw new Error("Unauthorized: Only the assigned mentor can accept this session");
+  }
+
+  await updateDoc(sessionRef, {
+    status: "upcoming",
     acceptedAt: serverTimestamp(),
     callStatus: "idle",
+    updatedAt: serverTimestamp(),
+  });
+}
+
+export async function declineSession(sessionId: string, userId: string): Promise<void> {
+  const sessionRef = doc(db, "sessions", sessionId);
+  const sessionSnap = await getDoc(sessionRef);
+  if (!sessionSnap.exists()) throw new Error("Session not found");
+  if (sessionSnap.data().mentorId !== userId) {
+    throw new Error("Unauthorized: Only the assigned mentor can decline this session");
+  }
+
+  await updateDoc(sessionRef, {
+    status: "declined",
+    declinedAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
 }

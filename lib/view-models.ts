@@ -107,6 +107,24 @@ export function toUpcomingSessionCards(sessions: ApiSession[]): SessionCardData[
   });
 }
 
+export function toPendingSessionCards(sessions: ApiSession[], currentUserId: string): SessionCardData[] {
+  return sessions.map((session) => {
+    const isMentor = session.mentorId === currentUserId;
+    const partnerName = isMentor ? (session.learner?.name ?? "Unknown Learner") : (session.mentor?.name ?? "Unknown Mentor");
+
+    return {
+      variant: "pending",
+      id: session._id,
+      title: session.title,
+      partnerName,
+      date: formatDisplayDate(session.date),
+      time: formatDisplayTime(session.date),
+      avatar: "", // handled in component
+      isMentor,
+    };
+  });
+}
+
 export function toPastSessionCards(sessions: ApiSession[]): SessionCardData[] {
   return sessions.map((session) => ({
     variant: "past",

@@ -10,12 +10,15 @@ import {
   getSessionsForUser,
   createSession,
   getMentors,
+  acceptSession,
+  declineSession,
   type ApiSession,
 } from "@/lib/firebaseServices";
 import {
   toFeaturedSessionCard,
   toPastSessionCards,
   toUpcomingSessionCards,
+  toPendingSessionCards,
 } from "@/lib/view-models";
 import type { BackendUser } from "@/lib/mockUser";
 
@@ -109,7 +112,7 @@ function NewSessionModal({ currentUser, initialMentorId, onClose, onCreated }: N
         learnerId,
         skill:     firstSkill,
         date:      finalDate.toISOString(),
-        status:    "upcoming",
+        status:    "pending",
       });
       onCreated();
     } catch (err) {
@@ -409,18 +412,38 @@ export default function SessionsPage() {
   }, [isAuthReady, user?._id, load]);
 
   // ── Derived buckets ──────────────────────────────────────────────────────
-  const liveSession = useMemo(
-    () => sessions.find((s) => s.status === "live"),
+  const pending = useMemo(
+    () => sessions.filter((s) => s.status === "pending"),
     [sessions],
   );
   const upcoming = useMemo(
-    () => sessions.filter((s) => s.status === "upcoming"),
+    () => sessions.filter((s) => s.status === "upcoming" && !s.endedAt),
     [sessions],
   );
   const past = useMemo(
-    () => sessions.filter((s) => s.status === "completed"),
+    () => sessions.filter((s) => s.status === "completed" || s.endedAt != null),
     [sessions],
   );
+
+  const handleAccept = useCallback(async (sessionId: string) => {
+    if (!user?._id) return;
+    try {
+      await acceptSession(sessionId, user._id);
+      void load(user._id, { cancelled: false });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [user?._id, load]);
+
+  const handleDecline = useCallback(async (sessionId: string) => {
+    if (!user?._id) return;
+    try {
+      await declineSession(sessionId, user._id);
+      void load(user._id, { cancelled: false });
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  }, [user?._id, load]);
 
   // ── After session created — close modal + reload ─────────────────────────
   const handleCreated = useCallback(() => {
@@ -469,30 +492,31 @@ export default function SessionsPage() {
         </div>
       )}
 
-      {/* ── Live / Active Now ───────────────────────────────────────────── */}
-      <section className="section-stack">
-        <div className="flex items-center gap-3">
-          <span className="h-3 w-3 animate-pulse rounded-full bg-tertiary" />
-          <h2 className="text-sm font-bold uppercase tracking-widest text-on-surface-variant">
-            Active Now
-          </h2>
-        </div>
-        {isLoading ? (
-          <Skeleton className="h-[300px] w-full" />
-        ) : liveSession ? (
-          <SessionCard session={toFeaturedSessionCard(liveSession)} />
-        ) : (
-          <div className="rounded-2xl bg-surface-container-low px-6 py-10 text-center">
-            <Icon name="videocam_off" className="mb-3 text-5xl text-stone-300" />
-            <p className="text-lg font-semibold text-on-surface">
-              No live session right now.
-            </p>
-            <p className="mt-2 text-sm text-on-surface-variant">
-              Your next exchange will appear here when it goes live.
-            </p>
+      {/* ── Pending Requests ────────────────────────────────────────────── */}
+      {pending.length > 0 && (
+        <section className="section-stack">
+          <div className="mb-4 flex items-center gap-3">
+            <h2 className="text-sm font-bold uppercase tracking-widest text-amber-500">
+              Pending Requests
+            </h2>
+            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-500">
+              {pending.length}
+            </span>
           </div>
-        )}
-      </section>
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {toPendingSessionCards(pending, user?._id ?? "").map((s, i) => (
+              <SessionCard 
+                key={`${s.title}-${i}`} 
+                session={{
+                  ...s,
+                  onAccept: () => (s as any).id && handleAccept((s as any).id),
+                  onDecline: () => (s as any).id && handleDecline((s as any).id),
+                } as any} 
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Upcoming + Past two-column grid ─────────────────────────────── */}
       <div className="grid gap-10 xl:grid-cols-2">
