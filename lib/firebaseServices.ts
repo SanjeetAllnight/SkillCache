@@ -345,6 +345,7 @@ export async function updateUserProfile(
     location: string;
     emailVisibility: "public" | "private";
     avatar: string;
+    contactEmail: string;
   }>
 ): Promise<void> {
   await updateDoc(doc(db, "users", uid), {

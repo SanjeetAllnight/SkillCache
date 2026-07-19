@@ -2,6 +2,7 @@ export type BackendUser = {
   _id: string;
   name: string;
   email: string;
+  contactEmail?: string;
   skillsOffered?: string[];
   skillsWanted?: string[];
   bio?: string;

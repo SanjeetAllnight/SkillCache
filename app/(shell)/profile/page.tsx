@@ -10,6 +10,7 @@ import { Tag } from "@/components/ui/tag";
 import { useAuth } from "@/components/providers/auth-provider";
 import { getUserById, updateUserProfile } from "@/lib/firebaseServices";
 import type { BackendUser } from "@/lib/mockUser";
+import { EditProfileModal } from "@/components/modals/edit-profile-modal";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -61,13 +62,8 @@ export default function ProfilePage() {
 
   // Own-profile edit state
   const [editing, setEditing]           = useState(false);
-  const [editName, setEditName]         = useState("");
-  const [editBio, setEditBio]           = useState("");
-  const [editOffered, setEditOffered]   = useState("");
-  const [editWanted, setEditWanted]     = useState("");
-  const [saving, setSaving]             = useState(false);
-  const [saveError, setSaveError]       = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess]   = useState(false);
+  const [imageError, setImageError]     = useState(false);
 
   // Whether we're viewing our own profile (no ?mentor param, or param === own uid)
   const isOwnProfile = !mentorId || mentorId === user?._id;
@@ -86,10 +82,7 @@ export default function ProfilePage() {
         if (!mounted) return;
         setProfile(data);
         if (isOwnProfile && data) {
-          setEditName(data.name ?? "");
-          setEditBio(data.bio ?? "");
-          setEditOffered((data.skillsOffered ?? []).join(", "));
-          setEditWanted((data.skillsWanted ?? []).join(", "));
+          // Fields are now handled in the modal, no local state needed
         }
       } catch (err) {
         if (!mounted) return;
@@ -104,36 +97,14 @@ export default function ProfilePage() {
   }, [displayUid, isOwnProfile]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
-  const handleSave = useCallback(async () => {
+  const handleSaveProfile = useCallback(async (data: Partial<BackendUser>) => {
     if (!user?._id) return;
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-    try {
-      await updateUserProfile(user._id, {
-        skillsOffered: parseComma(editOffered),
-        skillsWanted:  parseComma(editWanted),
-        bio:           editBio.trim(),
-      });
-      // Refresh local state
-      setProfile((prev) =>
-        prev
-          ? {
-              ...prev,
-              bio:          editBio.trim(),
-              skillsOffered: parseComma(editOffered),
-              skillsWanted:  parseComma(editWanted),
-            }
-          : prev,
-      );
-      setSaveSuccess(true);
-      setEditing(false);
-    } catch (err) {
-      setSaveError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
-  }, [user, editBio, editOffered, editWanted]);
+    await updateUserProfile(user._id, data);
+    setProfile(prev => prev ? { ...prev, ...data } : prev);
+    if (data.avatar !== undefined) setImageError(false);
+    setSaveSuccess(true);
+    setEditing(false);
+  }, [user]);
 
   // ── Loading skeleton ──────────────────────────────────────────────────────
   if (isLoading) {
@@ -193,8 +164,17 @@ export default function ProfilePage() {
 
           {/* Avatar + name */}
           <div className="relative -mt-10 flex flex-col gap-4 px-5 sm:px-6 md:-mt-14 md:flex-row md:items-end md:px-8 lg:px-10">
-            <div className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-2xl border-4 border-surface font-headline text-4xl font-black shadow-xl md:h-40 md:w-40 md:text-5xl ${avatarPalette}`}>
-              {avatarInitials}
+            <div className={`relative flex h-28 w-28 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-4 border-surface font-headline text-4xl font-black shadow-xl md:h-40 md:w-40 md:text-5xl ${!profile.avatar || imageError ? avatarPalette : "bg-surface"}`}>
+              {profile.avatar && !imageError ? (
+                <img
+                  src={profile.avatar}
+                  alt={`${profile.name} profile`}
+                  className="h-full w-full object-cover"
+                  onError={() => setImageError(true)}
+                />
+              ) : (
+                avatarInitials
+              )}
             </div>
 
             <div className="flex flex-1 flex-col justify-end gap-3 pb-2 md:flex-row md:items-end md:justify-between">
@@ -208,7 +188,7 @@ export default function ProfilePage() {
                 <p className="text-sm font-medium text-stone-500">
                   {offeredSkills.length > 0
                     ? offeredSkills[0] + " Mentor · Remote"
-                    : "SkillCache Member · Remote"}
+                    : "SkillCache Member"}
                 </p>
               </div>
 
@@ -248,25 +228,13 @@ export default function ProfilePage() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
               About
             </h2>
-            {editing ? (
-              <textarea
-                id="edit-bio"
-                value={editBio}
-                onChange={(e) => setEditBio(e.target.value)}
-                maxLength={400}
-                rows={5}
-                placeholder="Tell the community about yourself…"
-                className="w-full resize-none rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-3 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-              />
-            ) : (
-              <p className="text-base leading-relaxed text-on-surface-variant">
-                {bio || (
-                  <span className="italic text-stone-500">
-                    {isOwnProfile ? "No bio yet — click Edit Profile to add one." : "No bio provided."}
-                  </span>
-                )}
-              </p>
-            )}
+            <p className="text-base leading-relaxed text-on-surface-variant">
+              {bio || (
+                <span className="italic text-stone-500">
+                  {isOwnProfile ? "No bio yet — click Edit Profile to add one." : "No bio provided."}
+                </span>
+              )}
+            </p>
           </section>
 
           {/* Skills offered */}
@@ -274,27 +242,15 @@ export default function ProfilePage() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
               Teaching
             </h2>
-            {editing ? (
-              <div className="space-y-1">
-                <input
-                  id="edit-skills-offered"
-                  type="text"
-                  value={editOffered}
-                  onChange={(e) => setEditOffered(e.target.value)}
-                  placeholder="React, Figma, Python…"
-                  className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <p className="text-[11px] text-stone-400">Separate with commas</p>
-              </div>
-            ) : offeredSkills.length > 0 ? (
+            {offeredSkills.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {offeredSkills.map((s) => (
                   <Tag key={s} className="px-3 py-1 text-xs normal-case">{s}</Tag>
                 ))}
               </div>
             ) : (
-              <p className="text-sm italic text-stone-400">
-                {isOwnProfile ? "Add skills to teach others." : "No skills listed."}
+              <p className="text-sm italic text-stone-500">
+                {isOwnProfile ? "No teaching skills added yet." : "No skills listed."}
               </p>
             )}
           </section>
@@ -304,27 +260,15 @@ export default function ProfilePage() {
             <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">
               Learning
             </h2>
-            {editing ? (
-              <div className="space-y-1">
-                <input
-                  id="edit-skills-wanted"
-                  type="text"
-                  value={editWanted}
-                  onChange={(e) => setEditWanted(e.target.value)}
-                  placeholder="Piano, Spanish, Photography…"
-                  className="w-full rounded-xl border border-outline-variant/30 bg-surface-container px-4 py-2.5 text-sm text-on-surface placeholder-stone-400 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-                <p className="text-[11px] text-stone-400">Separate with commas</p>
-              </div>
-            ) : wantedSkills.length > 0 ? (
+            {wantedSkills.length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {wantedSkills.map((s) => (
                   <Tag key={s} className="px-3 py-1 text-xs normal-case bg-secondary-container/30">{s}</Tag>
                 ))}
               </div>
             ) : (
-              <p className="text-sm italic text-stone-400">
-                {isOwnProfile ? "Add skills you want to learn." : "No learning goals listed."}
+              <p className="text-sm italic text-stone-500">
+                {isOwnProfile ? "No learning interests added yet." : "No learning goals listed."}
               </p>
             )}
           </section>
@@ -335,44 +279,9 @@ export default function ProfilePage() {
               <h2 className="text-xs font-bold uppercase tracking-widest text-stone-400">Contact</h2>
               <div className="flex items-center gap-2 text-sm text-on-surface-variant">
                 <Icon name="alternate_email" className="text-primary" />
-                {profile.email}
+                {profile.contactEmail || profile.email}
               </div>
             </section>
-          )}
-
-          {/* Save / cancel — own profile editing */}
-          {isOwnProfile && editing && (
-            <div className="flex flex-col gap-3">
-              {saveError && (
-                <p className="rounded-xl bg-error/10 px-4 py-2 text-sm text-error">{saveError}</p>
-              )}
-              <button
-                id="btn-save-profile"
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-bold text-on-primary transition hover:opacity-90 disabled:opacity-60"
-              >
-                {saving ? (
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"/>
-                  </svg>
-                ) : (
-                  <Icon name="save" className="text-base" />
-                )}
-                {saving ? "Saving…" : "Save Changes"}
-              </button>
-              <button
-                id="btn-cancel-edit"
-                type="button"
-                onClick={() => { setEditing(false); setSaveError(null); }}
-                disabled={saving}
-                className="text-center text-sm text-stone-400 underline underline-offset-2 transition hover:text-stone-600"
-              >
-                Cancel
-              </button>
-            </div>
           )}
         </aside>
 
@@ -475,6 +384,15 @@ export default function ProfilePage() {
 
         </div>
       </div>
+
+      {isOwnProfile && profile && (
+        <EditProfileModal
+          isOpen={editing}
+          onClose={() => setEditing(false)}
+          profile={profile}
+          onSave={handleSaveProfile}
+        />
+      )}
     </div>
   );
 }
