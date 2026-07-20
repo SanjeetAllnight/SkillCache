@@ -7,6 +7,44 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { Button } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icon";
 import { getHeaderConfig } from "@/lib/shell-config";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+
+function SearchInput({ placeholder }: { placeholder: string }) {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  
+  // Use local state for immediate input feedback, sync with URL
+  const [localQuery, setLocalQuery] = useState(searchParams.get("q") || "");
+
+  useEffect(() => {
+    setLocalQuery(searchParams.get("q") || "");
+  }, [searchParams]);
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocalQuery(value);
+    
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) {
+      params.set("q", value);
+    } else {
+      params.delete("q");
+    }
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  return (
+    <input
+      type="text"
+      value={localQuery}
+      onChange={handleSearchChange}
+      placeholder={placeholder}
+      className="w-full border-none bg-transparent pl-8 pr-2 text-sm text-on-surface placeholder:text-stone-400 focus:outline-none focus:ring-0"
+    />
+  );
+}
 
 export function Navbar() {
   const pathname = usePathname();
@@ -21,13 +59,17 @@ export function Navbar() {
             name="search"
             className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400"
           />
-          <input
-            type="text"
-            readOnly
-            value=""
-            placeholder={config.placeholder}
-            className="w-full border-none bg-transparent pl-8 pr-2 text-sm text-on-surface placeholder:text-stone-400 focus:outline-none focus:ring-0"
-          />
+          <Suspense fallback={
+            <input
+              type="text"
+              readOnly
+              value=""
+              placeholder={config.placeholder}
+              className="w-full border-none bg-transparent pl-8 pr-2 text-sm text-on-surface placeholder:text-stone-400 focus:outline-none focus:ring-0"
+            />
+          }>
+            <SearchInput placeholder={config.placeholder} />
+          </Suspense>
         </div>
       </div>
 

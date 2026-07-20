@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { MentorCard } from "@/components/cards/mentor-card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -11,8 +12,10 @@ import { toMentorCardData } from "@/lib/view-models";
 import { useAuth } from "@/components/providers/auth-provider";
 import type { MentorCardData } from "@/components/cards/mentor-card";
 
-export default function MentorsPage() {
+function MentorsContent() {
   const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const searchQuery = searchParams.get("q")?.toLowerCase().trim() || "";
 
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const [filters, setFilters]           = useState<string[]>([]);
@@ -61,6 +64,15 @@ export default function MentorsPage() {
 
     return () => { isMounted = false; };
   }, [activeFilter, user?._id]);
+
+  const filteredMentors = mentors.filter((mentor) => {
+    if (!searchQuery) return true;
+    const nameMatch = Boolean(mentor.name && String(mentor.name).toLowerCase().includes(searchQuery));
+    const skillsMatch = Boolean(mentor.tags && Array.isArray(mentor.tags) && mentor.tags.some(tag => tag && String(tag).toLowerCase().includes(searchQuery)));
+    const roleMatch = Boolean(mentor.role && String(mentor.role).toLowerCase().includes(searchQuery));
+    const quoteMatch = Boolean(mentor.quote && String(mentor.quote).toLowerCase().includes(searchQuery));
+    return nameMatch || skillsMatch || roleMatch || quoteMatch;
+  });
 
   return (
     <div className="page-shell page-stack">
@@ -133,17 +145,19 @@ export default function MentorsPage() {
           ? Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-[320px] w-full" />
             ))
-          : mentors.map((mentor) => (
+          : filteredMentors.map((mentor) => (
               <MentorCard key={mentor.id ?? mentor.name} mentor={mentor} />
             ))}
       </section>
 
       {/* ── Empty state ────────────────────────────────────────────────── */}
-      {!isLoading && mentors.length === 0 && (
+      {!isLoading && filteredMentors.length === 0 && (
         <div className="rounded-2xl bg-surface-container-low px-6 py-14 text-center">
           <Icon name="person_search" className="mb-3 text-5xl text-stone-400" />
           <p className="text-lg font-semibold text-on-surface">
-            {activeFilter
+            {searchQuery 
+              ? "No mentors found matching your search." 
+              : activeFilter
               ? `No mentors found for "${activeFilter}"`
               : "No mentors yet — be the first!"}
           </p>
@@ -172,12 +186,24 @@ export default function MentorsPage() {
         <p className="text-sm font-medium text-stone-400">
           {isLoading
             ? "Loading mentors…"
-            : `${mentors.length} mentor${mentors.length !== 1 ? "s" : ""} · live from Firestore`}
+            : `${filteredMentors.length} mentor${filteredMentors.length !== 1 ? "s" : ""} · live from Firestore`}
         </p>
         <Button variant="outline" rounded="xl" className="mt-6 px-12" disabled>
           Powered by Firebase
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function MentorsPage() {
+  return (
+    <Suspense fallback={
+      <div className="page-shell page-stack items-center justify-center min-h-screen">
+        <p className="text-sm font-medium text-stone-400">Loading...</p>
+      </div>
+    }>
+      <MentorsContent />
+    </Suspense>
   );
 }
